@@ -101,7 +101,25 @@ test("acard mcp uploads local image paths before forwarding a write and rewrites
     await client.close();
     rmSync(dir, { recursive: true, force: true });
   }
-});
+// One CLI start + connect: 0.5-1.2 s alone on the Windows build host (was 2.4-3.5 s while every close waited out the
+// SDK's 2 s kill grace, #146), so 10 s leaves room for a loaded machine without hiding a hang.
+}, 10000);
+
+test("acard mcp exits on its own (code 0) when the client closes its stdin", async () => {
+  const env = { ...process.env, ACARD_TOKEN: TOKEN, ACARD_URL: `http://localhost:${remote.port}` };
+  const proc = Bun.spawn(["node", BIN, "mcp"], { env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  // Wait for the proxy's own "connected" line, then end stdin the way the MCP stdio client does on close.
+  const reader = proc.stderr.getReader();
+  for (let seen = ""; !seen.includes("connected to");) {
+    const { value, done } = await reader.read();
+    if (done) throw new Error("acard mcp exited before connecting: " + seen);
+    seen += new TextDecoder().decode(value);
+  }
+  reader.releaseLock();
+  proc.stdin.end();
+  expect(await proc.exited).toBe(0);
+  expect(proc.signalCode).toBeNull();
+}, 10000);
 
 test("attach_images uploads local paths and the image the user pasted (from the chat transcript); attach_video sends ffmpeg keyframes with times", async () => {
   const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");

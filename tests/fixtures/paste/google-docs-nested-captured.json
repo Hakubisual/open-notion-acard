@@ -1,0 +1,35 @@
+{
+  "source": "Google Docs task-created QA document",
+  "documentId": "1n0YFc_5Wm-2e3es9LC0CVCp1UqzQTf3eg7JhFSvu2DA",
+  "capturedAt": "2026-10-25T18:47:45.136Z",
+  "method": "Actual numbered list and indent toolbar; Ctrl+A Ctrl+C; copy-event MIME capture",
+  "plain": "Acard clipboard source\r\nParent item\r\nNested detail\t\r\nFinal paragraph\r\n",
+  "types": [
+    "text/html",
+    "text/plain",
+    "application/x-vnd.google-docs-document-slice-clip+wrapped",
+    "application/x-vnd.google-docs-internal-clip-id"
+  ],
+  "expected": [
+    [
+      "numbered",
+      "Acard clipboard source",
+      0
+    ],
+    [
+      "numbered",
+      "Parent item",
+      0
+    ],
+    [
+      "numbered",
+      "Nested detail",
+      1
+    ],
+    [
+      "numbered",
+      "Final paragraph",
+      0
+    ]
+  ]
+}

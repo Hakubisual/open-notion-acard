@@ -5,6 +5,16 @@ const source = await Bun.file(new URL("../assets/features/lazy/recent-cache.js",
 const context = { Promise };
 runInNewContext(source, context);
 const { touch, race } = context.AcardRecentCache;
+test("explicit local mode uses the server without locking or accessing hosted caches", async () => {
+  let feature;
+  const local = { Promise, document: { documentElement: { dataset: { acardLocal: "" } }, querySelector: () => null },
+    AcardEditor: { provide: (_name, value) => { feature = value; } } };
+  runInNewContext(source, local);
+  const data = { page: { title: "Local" }, blocks: [] };
+  expect(await feature.load(Promise.resolve(data))).toBe(data);
+  await expect(feature.load(Promise.reject(Error("server unavailable")))).rejects.toThrow("server unavailable");
+});
+
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });

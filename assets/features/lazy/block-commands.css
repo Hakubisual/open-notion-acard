@@ -1,0 +1,16 @@
+.core-selection-tools{position:fixed;left:50%;bottom:var(--space-6);transform:translateX(-50%);z-index:35;display:flex;align-items:center;flex-wrap:wrap;justify-content:center;gap:var(--space-2);width:max-content;max-width:calc(100vw - var(--space-6));box-sizing:border-box;padding:var(--space-2);color:var(--color-text);background:var(--color-raised);border:1px solid var(--color-border);border-radius:var(--radius-sm);box-shadow:var(--shadow-menu)}
+.core-selection-tools[hidden]{display:none}
+.core-selection-picker{position:absolute;left:0;right:0;bottom:calc(100% + var(--space-2));display:flex;flex-wrap:wrap;gap:var(--space-1);padding:var(--space-2);max-height:calc(50dvh - var(--space-6));overflow-y:auto;background:var(--color-raised);border:1px solid var(--color-border);border-radius:var(--radius-sm);box-shadow:var(--shadow-menu)}
+body.core-selecting .fbt{display:none}
+.core-block-mode{scroll-padding-bottom:140px;padding-bottom:140px}
+.core-editor-menu{max-height:calc(100dvh - var(--space-16));overflow-y:auto;overscroll-behavior:contain}
+.core-selection-tools .core-selection-count{font-size:var(--fs-13);padding:0 var(--space-2)}
+.core-selection-tools button{min-height:var(--control-h-md);margin:0}
+.core-selection-box{position:fixed;z-index:34;pointer-events:none;border:1px solid var(--color-accent);background:color-mix(in srgb, var(--color-accent) 10%, transparent);border-radius:var(--radius-2xs)}
+.core-shortcut-help{display:grid;grid-template-columns:fit-content(40%) 1fr;column-gap:var(--space-3);align-items:center}
+.core-shortcut-help dt{float:none;margin:0 0 var(--space-2);justify-self:start}
+.core-shortcut-help dd{margin:0 0 var(--space-2);padding:0}
+.core-block-mode .blk.selected{border-radius:var(--radius-xs)}
+.core-block-mode:focus-visible{outline:none}
+.core-block-mode:focus-visible .blk.selected>.body>.text{outline:1px solid var(--color-accent);outline-offset:-1px;border-radius:var(--radius-xs)}
+@media(max-width:600px){.core-selection-tools{bottom:var(--space-4);gap:var(--space-1)}.core-selection-tools button{min-height:44px;padding:var(--space-2)}.core-block-mode .blk>.gutter{flex-direction:column;gap:0;width:44px}.core-block-mode .gutter>button:first-child{display:none}.core-block-mode .blk>.body>.children:not(.cols-ed){margin-left:var(--space-2)}.core-block-mode .children>.blk>.gutter{position:absolute;left:0;transform:translateX(-100%)}.core-block-mode .children>.blk{margin-left:var(--space-3)}}

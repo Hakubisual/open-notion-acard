@@ -7,6 +7,14 @@
     return provider && typeof provider.fetch === "function" ? provider.fetch(url, options) : fetch(url, options);
   }
   var model = window.EditorModel;
+  var coreEditing = document.documentElement.getAttribute("data-core-editing") === "on" || /[?&]core-editing=on(?:&|$)/.test(location.search);
+  function loadEditing() { return Promise.all([lazy("block-commands"), lazy("editor-selection")]); }
+  function runBlockCommand(name, args) {
+    var before = snapshot();
+    return loadEditing().then(function (apis) {
+      return apis[0].run(name, args, before);
+    }).catch(featureError);
+  }
   var pageContext;
   var formatContext;
   var selectedIds = new Set();
@@ -50,6 +58,10 @@
     { type: "db_ref", label: "데이터베이스", hint: "연결된 DB 보기", ico: "⛁" }
   ];
 
+  // issue 147: default column names are data, named in the UI language they are made in (assets/i18n-app.js).
+  function dataName(ko) { return window.AcardLang ? AcardLang.text(ko) : ko; }
+  function dbCols() { return ["상태", "담당", "다음 할 일"].map(dataName); }
+
   var easy = null;
   function loadEasy() { return Promise.all([lazy("easy-insert").then(function (e) { easy = e; }, function () {}), loadComponents()]); }
   // ds10: registered components join the slash list once the components chunk is loaded (with easy-insert).
@@ -69,7 +81,7 @@
     file: function () { return { meta: { url: "", name: "" } }; },
     embed: function () { return { meta: { url: "" } }; },
     bookmark: function () { return { meta: { url: "" } }; },
-    table: function () { return { meta: { columns: ["열1", "열2", "열3"], rows: [["", "", ""], ["", "", ""]], header: true } }; },
+    table: function () { return { meta: { columns: ["열1", "열2", "열3"].map(dataName), rows: [["", "", ""], ["", "", ""]], header: true } }; },
     button: function () { return { meta: { url: "" } }; },
     progress: function () { return { meta: { value: 50, color: "blue" } }; }
   };
@@ -118,13 +130,16 @@
   };
 
   function api(path, options) {
-    return net("/api" + path, Object.assign({ headers: { "content-type": "application/json" } }, options || {})).then(apiResponse);
+    return net("/api" + path, Object.assign({ headers: { "content-type": "application/json" } }, options || {})).then(apiResponse, function (error) {
+      if (error.name !== "AbortError") error.acardFailure = "network";
+      throw error;
+    });
   }
 
   function apiResponse(res) {
-    if (res.headers.get("x-acard-offline") === "1") return Promise.reject(new Error("오프라인 · 읽기 전용. 다시 연결한 뒤 새로고침해 주세요."));
+    if (res.headers.get("x-acard-offline") === "1") return Promise.reject(Object.assign(new Error("오프라인 · 읽기 전용. 다시 연결한 뒤 새로고침해 주세요."), { acardFailure: "offline-cache", acardIdentity: res.headers.get("x-acard-id") }));
     return res.json().catch(function () { return {}; }).then(function (body) {
-      if (!res.ok) throw new Error(body.error || String(res.status));
+      if (!res.ok) throw Object.assign(new Error(body.error || String(res.status)), { acardFailure: "http", status: res.status });
       return body;
     });
   }
@@ -157,7 +172,7 @@
   }
   window.AcardEditor = {
     lazy: lazy,
-    provide: function (name, api) { lazyApis[name] = api; },
+    provide: function (name, api) { lazyApis[name] = api; if (name === "editor-selection") selectionTools = api; },
     on: function (event, fn) {
       var listeners = featureListeners[event] || (featureListeners[event] = []);
       listeners.push(fn);
@@ -168,7 +183,17 @@
     },
     get state() { return state; },
     blockTypes: function () { return BLOCK_TYPES.concat(componentItems); }, loadComponents: function () { return loadComponents(); },
-    api: api, slug: slug, loadTree: function () { return loadTree(); }, scheduleSave: scheduleSave, render: render, setSave: setSave, save: save,
+    coreEditing: coreEditing,
+    createBlock: newBlock,
+    transact: transact, captureSelection: captureSelection, restoreSelection: restoreSelection,
+    remoteHistory: function (remote, preserve) { if (!preserve) { undoStack.length = 0; redoStack.length = 0; } previousSnapshot = snapshot(); if (remote) emitFeature("remoteAdopted", remote); },
+    recordExternalEdit: function (run) { undoStack.push({ run: run }); redoStack.length = 0; },
+    whenSaveSettled: function () { return (activeSave || Promise.resolve()).catch(function () {}); },
+    selectBlocks: function (ids) {
+      restoreSelection({ anchor: null, focus: null, selectedBlockIds: ids });
+      emitFeature("selection", { blockIds: Array.from(selectedIds) });
+    },
+    paintTocs: paintTocs, api: api, slug: slug, loadTree: function () { return loadTree(); }, scheduleSave: scheduleSave, render: render, setSave: setSave, save: save,
     transport: function (pageSlug, payload) {
       if (!Number.isSafeInteger(payload.base_updated)) return Promise.resolve(new Response(JSON.stringify({ error: "불러오지 못했어요 · 읽기 전용. 새로고침해 주세요." }), { status: 428 }));
       return net("/api/page/" + encodeURIComponent(pageSlug), { method: "PUT", headers: { "content-type": "application/json", "x-acard-client": this.clientId || "" }, body: JSON.stringify(payload) });
@@ -220,42 +245,73 @@
     els.save.classList.toggle("on", !!on);
   }
   // After a big edit (delete / move) offer one-click undo for 5 s; Ctrl+Z does the same.
-  var toastTimer = null;
-  function undoToast(text) {
-    var box = document.getElementById("undo-toast");
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "undo-toast"; box.className = "undo-toast"; box.setAttribute("role", "status");
-      box.innerHTML = '<span></span><button type="button">되돌리기</button>';
-      box.querySelector("button").addEventListener("click", function () { box.hidden = true; restoreEdit(undoStack, redoStack); });
-      document.body.appendChild(box);
-    }
-    box.firstChild.textContent = text + " · Ctrl+Z";
-    box.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { box.hidden = true; }, 10000);
-  }
+  function undoToast(text) { lazy("legacy-block-menu").then(function (menu) { menu.toast(text, function () { restoreEdit(undoStack, redoStack); }); }).catch(featureError); }
 
   var saveTimer = null;
   var activeSave = null;
   var hasToc = false;
   var undoStack = [], redoStack = [], previousSnapshot = null, restoring = false;
+  var transaction = null;
+  var selectionTools = null;
   function snapshot() { return JSON.stringify({ title: state.title, blocks: state.blocks }); }
+  function captureSelection() { return selectionTools.capture(Array.from(selectedIds)); }
+  function restoreSelection(bookmark) {
+    if (!bookmark) return;
+    selectedIds.clear();
+    bookmark.selectedBlockIds.forEach(function (id) { if (document.getElementById("block-" + id)) selectedIds.add(id); });
+    if (selectionTools) selectionTools.restore(bookmark);
+  }
+  function transact(label, mutate, options) {
+    if (transaction) {
+      try {
+        if (mutate.constructor.name === "AsyncFunction") throw Error("synchronous only");
+        var nested = mutate(transaction.api); if (nested && typeof nested.then === "function") throw Error("synchronous only");
+      }
+      catch (error) { transaction.error = error; throw error; }
+      return false;
+    }
+    var before = snapshot(), selection = options && options.beforeSelection || captureSelection();
+    var tx = { error: null, selection: selection, api: { setSelection: function (value) { tx.selection = value; } } };
+    transaction = tx;
+    try {
+      if (mutate.constructor.name === "AsyncFunction") throw Error("synchronous only");
+      var result = mutate(tx.api);
+      if (result && typeof result.then === "function") throw Error("synchronous only");
+      if (tx.error) throw tx.error;
+      state.blocks = structure(state.blocks);
+    } catch (error) {
+      var original = JSON.parse(before); state.title = original.title; state.blocks = original.blocks;
+      transaction = null; render(); restoreSelection(selection); throw error;
+    }
+    transaction = null;
+    if (snapshot() === before) return false;
+    undoStack.push({ document: before, selection: selection, label: label });
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack = [];
+    if (!(options && options.render && options.render())) render();
+    restoreSelection(tx.selection);
+    restoring = true;
+    try { scheduleSave(); } finally { restoring = false; }
+    return true;
+  }
   function restoreEdit(from, to) {
     if (!from.length) return;
-    to.push(snapshot());
-    var value = JSON.parse(from.pop());
+    if (from[from.length - 1].run) return window.AcardEditor.commands.restoreExternal(from, to);
+    var entry = from.pop();
+    to.push(typeof entry === "string" ? snapshot() : { document: snapshot(), selection: captureSelection(), label: entry.label });
+    var value = JSON.parse(typeof entry === "string" ? entry : entry.document);
     var hadSubpages = subpagesOf(state.blocks);
     state.title = value.title; state.blocks = value.blocks;
     syncSubpages(hadSubpages, subpagesOf(state.blocks));
     previousSnapshot = snapshot();
     restoring = true;
-    render(); scheduleSave();
-    restoring = false;
+    try { render(); scheduleSave(); } finally { restoring = false; }
+    if (typeof entry !== "string") restoreSelection(entry.selection);
   }
   // edited: the block whose text just changed (wireText). The TOC lists headings only, so typing in any other
   // block (or on a page without a TOC) does not repaint it; structural edits pass nothing and always repaint.
   function scheduleSave(edited) {
+    if (transaction) return;
     startupEdited = true;
     var current = snapshot();
     if (!restoring && previousSnapshot && current !== previousSnapshot) {
@@ -273,6 +329,7 @@
   }
 
   function save() {
+    if (transaction) throw Error("busy");
     if (state.saving) return activeSave.then(function () { return state.dirty ? save() : undefined; });
     if (!state.dirty) return Promise.resolve();
     if (!Number.isSafeInteger(state.baseUpdated)) return serverPage.then(function () {
@@ -313,6 +370,7 @@
   }
 
   function render() {
+    if (transaction) return;
     if (document.activeElement !== els.title) els.title.value = state.title;
     var shaped = structure(state.blocks);
     if (shaped !== state.blocks) state.blocks = shaped;
@@ -340,10 +398,12 @@
     row.id = "block-" + block.id;
     row.dataset.index = String(index);
     row.classList.toggle("selected", selectedIds.has(block.id));
-    // Toggle heading (notion-parity C7): a heading with meta.toggle folds its indented blocks like a toggle.
-    var tgh = /^heading[1-4]$/.test(block.type) && block.meta && block.meta.toggle === true;
+    // Lists keep their marker and type; only rows with descendants gain the existing twist.
+    var list = coreEditing && /^(bulleted|numbered)$/.test(block.type) && state.blocks[index + 1] && model.depth(state.blocks[index + 1]) > model.depth(block);
+    var tgh = list || /^heading[1-4]$/.test(block.type) && block.meta && block.meta.toggle === true;
+    var expanded = list ? !block.meta || block.meta.open !== false : !!(block.meta && block.meta.open);
     if (tgh) row.classList.add("tgh");
-    if ((block.type === "toggle" || tgh) && !(block.meta && block.meta.open)) row.classList.add("collapsed");
+    if ((block.type === "toggle" || tgh) && !expanded) row.classList.add("collapsed");
     if (block.meta && block.meta.subpage) row.classList.add("subpage");
     // Block color (notion-parity C6): same bc-* class as the reader; the rules come with the lazy block-style chunk.
     var color = block.type !== "progress" && block.meta && /^(gray|brown|orange|yellow|green|blue|purple|pink|red)(_background)?$/.exec(block.meta.color);
@@ -358,7 +418,7 @@
     addBtn.type = "button";
     addBtn.title = "아래에 블록 추가";
     addBtn.textContent = "+";
-    addBtn.addEventListener("click", function () { insertAfter(index, newBlock()); });
+    addBtn.addEventListener("click", function () { insertAfter(Number(row.dataset.index), newBlock()); });
     var menuBtn = document.createElement("button");
     menuBtn.type = "button";
     menuBtn.title = "블록 메뉴";
@@ -367,8 +427,8 @@
     wireDrag(menuBtn, row, block);
     menuBtn.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      if (!humanEdit()) return openCtx(menuBtn, index);
-      lazy("context-menu").then(function (menu) { menu.openBlock(block.id, menuBtn); }, function () { openCtx(menuBtn, index); });
+      if (!humanEdit()) return openCtx(menuBtn, Number(row.dataset.index));
+      lazy("context-menu").then(function (menu) { menu.openBlock(block.id, menuBtn); }, function () { openCtx(menuBtn, Number(row.dataset.index)); });
     });
     gutter.appendChild(addBtn);
     gutter.appendChild(menuBtn);
@@ -429,6 +489,15 @@
       return row;
     }
 
+    if (block.type === "synced") {
+      var sh = document.createElement("div");
+      sh.textContent = "불러오는 중…";
+      lazy("synced-blocks").then(function (s) { s.mount(sh, block); }, function () { sh.textContent = "동기화 블록을 불러오지 못했어요."; });
+      body.appendChild(sh);
+      row.appendChild(body);
+      return row;
+    }
+
     if (block.type === "component") {
       var uh = document.createElement("div");
       uh.textContent = "불러오는 중…";
@@ -468,7 +537,8 @@
       twist.type = "button";
       twist.className = "twist";
       twist.textContent = "▶";
-      twist.classList.toggle("open", !!(block.meta && block.meta.open));
+      twist.classList.toggle("open", expanded);
+      twist.setAttribute("aria-expanded", String(expanded));
       twist.setAttribute("aria-label", "토글 펴기");
       twist.addEventListener("click", function () {
         var open = row.classList.toggle("collapsed");
@@ -518,7 +588,9 @@
 
   function wireText(text, block, row, index) {
     text.addEventListener("focus", loadEasy, { once: true });
+    if (coreEditing) text.addEventListener("focus", function () { loadEditing().catch(featureError); }, { once: true });
     text.addEventListener("input", function (ev) {
+      var index = Number(row.dataset.index);
       block.text = text.textContent;
       if (block.type !== "code") block.meta = Object.assign({}, block.meta, { richText: model.readRich(text) });
       if (!ev.isComposing) {
@@ -540,7 +612,12 @@
     });
     text.addEventListener("keydown", function (ev) {
       if (ev.isComposing || ev.keyCode === 229) return;
+      var index = Number(row.dataset.index);
       var mod = ev.ctrlKey || ev.metaKey;
+      if (coreEditing && els.slash.hidden && (ev.key.length > 1 || mod)) {
+        if (selectionTools && window.AcardEditor.commands?.textKey) { if (window.AcardEditor.commands.textKey(ev, block.id)) return; }
+        else if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); runBlockCommand("splitCurrent", [block.id]); return; }
+      }
       if (mod && !ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === "d") {
         ev.preventDefault();
         focusBlock(duplicate(index).id);
@@ -563,6 +640,7 @@
         insertAfter(index, newBlock(block.type === "code" ? "code" : (block.type === "bulleted" || block.type === "numbered" || block.type === "to_do" ? block.type : "paragraph")), block.indent);
       } else if (ev.key === "Backspace" && text.textContent === "" && state.blocks.length > 1) {
         ev.preventDefault();
+        if (model.endOf(state.blocks, index) > index + 1) return;
         var column = cm.columnOf(state.blocks, index);
         // The only block of a column stays (empty); the column itself never disappears from Backspace.
         if (column && model.endOf(state.blocks, index) === model.endOf(state.blocks, state.blocks.indexOf(column)) && state.blocks[index - 1] === column) return;
@@ -771,7 +849,7 @@
     var meta = block.meta || {};
     var columns = Array.isArray(meta.columns) ? meta.columns.slice() : [];
     var rows = Array.isArray(meta.rows) ? meta.rows.slice() : [];
-    if (!columns.length) columns = ["상태", "담당", "다음 할 일"];
+    if (!columns.length) columns = dbCols();
     var view = meta.view === "board" ? "board" : "table";
 
     var wrap = document.createElement("div");
@@ -876,7 +954,7 @@
       cell.contentEditable = "true";
       cell.textContent = column;
       cell.addEventListener("input", function () {
-        var value = cell.textContent.trim() || "열";
+        var value = cell.textContent.trim() || dataName("열");
         var old = columns[columnIndex];
         if (value === old) return;
         columns[columnIndex] = value;
@@ -899,7 +977,7 @@
         addBox.type = "button"; addBox.className = "cell et-check";
         addBox.setAttribute("role", "checkbox"); addBox.setAttribute("aria-label", "완료");
         addBox.onclick = function () {
-          var name = "완료";
+          var name = dataName("완료");
           while (columns.indexOf(name) >= 0) name += "_";
           columns.unshift(name);
           rows.forEach(function (r) { r[name] = "[ ]"; });
@@ -964,7 +1042,7 @@
     colBtn.type = "button";
     colBtn.textContent = "+ 열 추가";
     colBtn.addEventListener("click", function () {
-      var base = "열";
+      var base = dataName("열");
       var n = 2;
       while (columns.indexOf(base + n) >= 0) n += 1;
       columns.push(base + n);
@@ -977,19 +1055,8 @@
     return wrap;
   }
 
-  function openLightbox(src, alt) {
-    var overlay = document.createElement("div");
-    overlay.className = "lightbox on";
-    var img = document.createElement("img");
-    img.src = src;
-    img.alt = alt || "";
-    overlay.appendChild(img);
-    overlay.addEventListener("click", function () { overlay.remove(); });
-    document.addEventListener("keydown", function onKey(ev) {
-      if (ev.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onKey); }
-    });
-    document.body.appendChild(overlay);
-  }
+  function featureError(error) { setSave(error.message, true); }
+  function openLightbox(src, alt) { lazy("image-tools").then(function (tools) { tools.open(src, alt); }).catch(featureError); }
 
   function pickFile(accept, cb) {
     var input = document.createElement("input");
@@ -1001,59 +1068,8 @@
     input.click();
   }
 
-  function downscaleImage(file, maxSide) {
-    if (!/^image\//.test(file.type) || file.type === "image/svg+xml") return Promise.resolve(file);
-    return new Promise(function (resolve) {
-      var img = new Image();
-      var url = URL.createObjectURL(file);
-      img.onload = function () {
-        URL.revokeObjectURL(url);
-        var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        if (scale === 1 && file.size < 1536 * 1024) { resolve(file); return; }
-        var canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(function (blob) {
-          resolve(blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file);
-        }, "image/jpeg", 0.85);
-      };
-      img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
-      img.src = url;
-    });
-  }
 
-  function uploadFile(file) {
-    var form = new FormData();
-    form.append("file", file, file.name);
-    form.append("page", slug);
-    return net("/api/upload", { method: "POST", body: form }).then(function (res) {
-      return res.json().then(function (body) {
-        if (!res.ok) throw new Error(body.error || String(res.status));
-        return body;
-      });
-    });
-  }
-
-  function uploadInto(block, file) {
-    block._busy = true;
-    render();
-    setSave("올리는 중…", true);
-    var ready = /^image\//.test(file.type) ? downscaleImage(file, 1600) : Promise.resolve(file);
-    return ready.then(function (f) { return created.then(function () { return uploadFile(f); }); }).then(function (res) {
-      block._busy = false;
-      block.meta = Object.assign({}, block.meta, { src: res.url, url: res.url, name: res.name, size: res.size });
-      delete block.meta.iw; delete block.meta.ih;
-      if (res.width > 0 && res.height > 0) { block.meta.iw = res.width; block.meta.ih = res.height; }
-      render();
-      setSave("저장됨", false);
-      scheduleSave();
-    }).catch(function (err) {
-      block._busy = false;
-      render();
-      setSave("올리기 실패: " + err.message, true);
-    });
-  }
+  function uploadInto(block, file) { return lazy("image-tools").then(function (tools) { return tools.uploadInto(block, file, created); }).catch(featureError); }
 
   function focusedIndex() {
     var row = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".blk") : null;
@@ -1379,7 +1395,8 @@
 
   var HEADING_LEVEL = { heading1: 2, heading2: 3, heading3: 4, heading4: 5 };
   function paintToc(nav) {
-    var heads = state.blocks.filter(function (b) { return HEADING_LEVEL[b.type] && String(b.text || "").trim(); });
+    // The visuals chunk spreads each HTML block into its headings (ids lead to anchors by its frame) once it has loaded.
+    var heads = (window.AcardHtmlHeadings ? window.AcardHtmlHeadings(state.blocks) : state.blocks).filter(function (b) { return HEADING_LEVEL[b.type] && String(b.text || "").trim(); });
     var key = JSON.stringify(heads.map(function (b) { return [b.id, b.type, b.text]; }));
     if (nav.dataset.key === key) return;
     nav.dataset.key = key;
@@ -1556,7 +1573,7 @@
     if (easy) easy.remember(type);
     if (/^\/[^\s/]{0,12}$/.test(block.text)) { block.text = ""; if (block.meta) delete block.meta.richText; }
     if (type === "database") {
-      block.meta = { columns: ["상태", "담당", "다음 할 일"], rows: [], view: "table" };
+      block.meta = { columns: dbCols(), rows: [], view: "table" };
       block.text = "";
     } else if (BLOCK_DEFAULTS[type]) {
       block.meta = BLOCK_DEFAULTS[type]().meta;
@@ -1569,6 +1586,8 @@
   }
 
   document.addEventListener("keydown", function (ev) {
+    if (ev.isComposing || ev.keyCode === 229) return;
+    if (coreEditing && selectedIds.size && window.AcardEditor.commands?.blockKey?.(ev)) return;
     if (selectedIds.size && (ev.key === "Delete" || ev.key === "Backspace") && !ev.target.closest('[contenteditable="true"],input,textarea')) {
       ev.preventDefault();
       var remove = new Set();
@@ -1600,45 +1619,10 @@
     }
   });
 
-  var ctxIndex = -1;
-
   function openCtx(anchor, index) {
-    ctxIndex = index;
-    var rect = anchor.getBoundingClientRect();
-    els.ctx.style.left = Math.min(rect.left, window.innerWidth - 280) + "px";
-    els.ctx.style.top = Math.min(rect.bottom + 4, window.innerHeight - 320) + "px";
-    var block = state.blocks[index];
-    var actions = [
-      ["위로 올리기", function () { move(index, -1); undoToast("블록을 옮겼어요"); }],
-      ["아래로 내리기", function () { move(index, 1); undoToast("블록을 옮겼어요"); }],
-      ["들여쓰기", function () { indent(index, 1); }],
-      ["내어쓰기", function () { indent(index, -1); }],
-      ["복제", function () { duplicate(index); }],
-      ["블록 링크 복사", function () { navigator.clipboard.writeText(location.origin + "/edit/" + encodeURIComponent(slug) + "/#block-" + encodeURIComponent(block.id)).then(function () { setSave("블록 링크 복사됨", false); }).catch(function (error) { setSave("복사 실패: " + error.message, true); }); }],
-      ["종류 바꾸기", function () { openSlash(anchor, index); }],
-      cm.columnOf(state.blocks, index) ? ["왼쪽 열로", function () { moveToColumn(index, -1); }] : null,
-      cm.columnOf(state.blocks, index) ? ["오른쪽 열로", function () { moveToColumn(index, 1); }] : null,
-      /^heading[1-4]$/.test(block.type) ? [block.meta && block.meta.toggle ? "접기 끄기" : "접히는 제목으로", function () {
-        var meta = Object.assign({}, block.meta);
-        if (meta.toggle) { delete meta.toggle; delete meta.open; } else { meta.toggle = true; meta.open = true; }
-        block.meta = meta; render(); scheduleSave();
-      }] : null,
-      /^(html|visual)$/.test(block.type) && window.AcardFolders ? ["부품으로 등록", function () { lazy("part-register").then(function (r) { r.open(block, index); }); }] : null,
-      ["색", function () { lazy("block-style").then(function (s) { s.open(anchor, block); }); }],
-      ["댓글", function () { if (pageContext) pageContext.comments(block.id); }],
-      ["삭제", function () { state.blocks.splice(index, model.endOf(state.blocks, index) - index); render(); scheduleSave(); undoToast("블록을 지웠어요"); }]
-    ];
-    els.ctx.innerHTML = "<h3>블록</h3>";
-    actions.filter(Boolean).forEach(function (pair) {
-      var button = document.createElement("button");
-      button.type = "button";
-      button.textContent = pair[0];
-      if (pair[0] === "삭제") button.className = "danger";
-      button.addEventListener("mousedown", function (ev) { ev.preventDefault(); });
-      button.addEventListener("click", function (ev) { ev.stopPropagation(); els.ctx.hidden = true; pair[1](); });
-      els.ctx.appendChild(button);
-    });
-    els.ctx.hidden = false;
+    lazy("legacy-block-menu").then(function (menu) {
+      menu.open(anchor, index, { els, state, slug, move, indent, duplicate, undoToast, setSave, openSlash, cm, moveToColumn, render, scheduleSave, lazy, pageContext, model });
+    }).catch(featureError);
   }
 
   function duplicate(index) {
@@ -1707,6 +1691,11 @@
       if (!start || Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 6) return;
       dragged = true;
       row.classList.add("dragging");
+      aim(ev);
+      // M07 edge autoscroll lives in the lazy block-commands chunk (core editing).
+      window.AcardEditor.commands?.dragEdge?.({ clientX: ev.clientX, clientY: ev.clientY }, aim, function () { return !!start; });
+    });
+    function aim(ev) {
       if (target) target.classList.remove("drop-before", "drop-after", "drop-into");
       var hit = document.elementFromPoint(ev.clientX, ev.clientY);
       target = hit && hit.closest(".blk");
@@ -1715,7 +1704,7 @@
       if (target.classList.contains("colcell")) { target.classList.add("drop-into"); return; }
       var rect = target.getBoundingClientRect();
       target.classList.add(ev.clientY < rect.top + rect.height / 2 ? "drop-before" : "drop-after");
-    });
+    }
     function finish(ev) {
       row.classList.remove("dragging");
       if (target) {
@@ -1725,8 +1714,9 @@
         var into = target.classList.contains("drop-into");
         var targetDepth = model.depth(state.blocks[destination]) + (into ? 1 : 0);
         target.classList.remove("drop-before", "drop-after", "drop-into");
-        if (ev.type !== "pointercancel" && moveSelection(index, after || into ? model.endOf(state.blocks, destination) : destination, targetDepth)) {
-          render(); scheduleSave();
+        if (ev.type !== "pointercancel") {
+          if (coreEditing) runBlockCommand("dropBlocks", [selectedIds.has(block.id) ? Array.from(selectedIds) : [block.id], state.blocks[destination].id, into ? "parentId" : after ? "afterId" : "beforeId"]);
+          else if (moveSelection(index, after || into ? model.endOf(state.blocks, destination) : destination, targetDepth)) { render(); scheduleSave(); }
         }
       }
       start = null; target = null;
@@ -1814,88 +1804,9 @@
   }
 
   function pageMenu(anchor, page) {
-    var rect = anchor.getBoundingClientRect();
-    els.ctx.style.left = Math.min(rect.left - 180, window.innerWidth - 280) + "px";
-    els.ctx.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + "px";
-    els.ctx.replaceChildren();
-    var heading = document.createElement("h3"); heading.textContent = page.title; els.ctx.appendChild(heading);
-
-    var actions = [
-      ["이름 바꾸기", function () { renameInline(page); }],
-      ["여기 아래로 옮기기", function () { pickParent(page); }],
-      page.parent ? ["맨 위로 옮기기", function () {
-        api("/page/" + encodeURIComponent(page.slug) + "/move", { method: "POST", body: JSON.stringify({ parent: null }) }).then(loadTree, function (error) { setSave(error.message, true); });
-      }] : null,
-      ["삭제", function () {
-        if (!window.confirm(page.title + " 페이지를 지울까요?")) return;
-        api("/page/" + encodeURIComponent(page.slug), { method: "DELETE" }).then(function () {
-          if (page.slug === slug) location.href = "/";
-          else loadTree();
-        }, function (error) { setSave(error.message, true); });
-      }]
-    ];
-    actions.filter(Boolean).forEach(function (pair) {
-      var button = document.createElement("button");
-      button.type = "button";
-      button.textContent = pair[0];
-      button.addEventListener("mousedown", function (ev) { ev.preventDefault(); });
-      button.addEventListener("click", function (ev) { ev.stopPropagation(); els.ctx.hidden = true; pair[1](); });
-      button.onkeydown = function (ev) {
-        if (ev.key === "Escape") { els.ctx.hidden = true; anchor.focus(); }
-      };
-      if (pair[0] === "삭제") button.className = "danger";
-      els.ctx.appendChild(button);
-    });
-    els.ctx.hidden = false;
-    els.ctx.children[1].focus();
-  }
-
-  function renameInline(page) {
-    var link = els.tree.querySelector('a[href="/edit/' + encodeURIComponent(page.slug) + '/"]');
-    if (!link) return;
-    var input = document.createElement("input");
-    input.className = "rename";
-    input.value = page.title;
-    link.replaceWith(input);
-    input.focus();
-    input.select();
-    function commit() {
-      var title = input.value.trim();
-      if (!title || title === page.title) { loadTree(); return; }
-      api("/page/" + encodeURIComponent(page.slug) + "/rename", { method: "POST", body: JSON.stringify({ title: title }) })
-        .then(function () {
-          if (page.slug === slug) state.title = els.title.value = title;
-          return loadTree();
-        }, function (error) { renderTree(); setSave(error.message, true); });
-    }
-    input.onblur = commit;
-    input.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
-      if (ev.key === "Escape") { input.value = page.title; input.blur(); }
-    });
-  }
-
-  function pickParent(page) {
-    var select = document.createElement("select");
-    select.className = "rename";
-    select.add(new Option("(맨 위)", ""));
-    state.pages.forEach(function (other) {
-      if (other.slug !== page.slug) select.add(new Option(other.title, other.slug));
-    });
-    var link = els.tree.querySelector('a[href="/edit/' + encodeURIComponent(page.slug) + '/"]');
-    if (!link) return;
-    link.replaceWith(select);
-    select.focus();
-    select.addEventListener("change", function () {
-      var move = function (confirmShare) {
-        return api("/page/" + encodeURIComponent(page.slug) + "/move", { method: "POST", body: JSON.stringify({ parent: select.value || null, confirmShare: confirmShare }) });
-      };
-      move(false).catch(function (error) {
-        if (!/공유됩니다/.test(error.message) || !window.confirm(error.message + "\n\n그래도 옮길까요?")) throw error;
-        return move(true);
-      }).then(loadTree, function (error) { renderTree(); setSave(error.message, true); });
-    });
-    select.onblur = loadTree;
+    lazy("editor-page-menu").then(function (menu) {
+      menu.open(anchor, page, { els: els, state: state, slug: slug, api: api, loadTree: loadTree, renderTree: renderTree, setSave: setSave });
+    }).catch(featureError);
   }
 
   function loadBacklinks() {
@@ -1999,7 +1910,7 @@
     if (moreMenu) moreMenu.hidden = true;
     shortcutsEl.hidden = false;
     var close = document.getElementById("shortcuts-close");
-    if (close) close.focus();
+    if (close) close.focus({ preventScroll: true });
   });
   if (shortcutsClose) shortcutsClose.addEventListener("click", function () { shortcutsEl.hidden = true; });
   if (shortcutsEl) shortcutsEl.addEventListener("mousedown", function (ev) {
@@ -2007,94 +1918,32 @@
   });
 
   // --- 빠른 검색 팔레트 ---
-  var palette = document.getElementById("palette");
-  var paletteInput = document.getElementById("palette-q");
-  var paletteList = document.getElementById("palette-list");
-  var paletteItems = [];
-  var paletteSel = 0, pSeq = 0, pWait, pGo;
-  var RECENT_KEY = "dori-notes-recent:" + (typeof identity === "undefined" ? "" : identity);
-  var recents = [];
-  try { if (identity) recents = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) { recents = []; }
-
-  function renderPalette() {
-    if (!paletteList) return;
-    paletteList.ariaBusy = !!pWait;
-    if (!paletteItems.length) { paletteList.innerHTML = pWait ? "" : '<p class="pnone">결과가 없어요.</p>'; return; }
-    paletteList.innerHTML = paletteItems.map(function (item, i) {
-      var href = "/edit/" + encodeURIComponent(item.slug) + "/";
-      return '<a role="option" data-i="' + i + '" href="' + href + '"' + (i === paletteSel ? ' class="on"' : "") + ">" +
-        "<span class=\"pt\">" + (item.title || item.slug) + "</span>" +
-        (item.kind === "db" ? '<span class=\"dbmark\">표</span>' : "") +
-        (item.snippet ? '<span class=\"ps\">' + item.snippet + "</span>" : "") +
-        "</a>";
-    }).join("");
-  }
-  function searchPalette(q) {
-    var query = q.trim().toLowerCase(), asked = pSeq;
-    pWait = query;
-    if (!query) {
-      paletteItems = recents.map(function (r) { return { slug: r.slug, title: r.title, snippet: "최근 본 페이지" }; }).slice(0, 8);
-      paletteSel = 0;
-      renderPalette();
-      return;
-    }
-    net("/api/search?q=" + encodeURIComponent(q)).then(function (r) { return r.ok ? r.json() : { results: [] }; }).catch(Object).then(function (data) {
-      if (asked != pSeq) return;
-      pWait = 0;
-      paletteItems = (data.results || []).map(function (hit) {
-        var text = hit.hit || "";
-        return { slug: hit.slug, title: hit.title, snippet: text.length > 90 ? text.slice(0, 90) + "…" : text, kind: hit.kind };
-      }).slice(0, 12);
-      paletteSel = 0;
-      renderPalette();
-      if (pGo) followSelected();
-    });
-  }
+  var palette = document.getElementById("palette"), paletteFeature, paletteRequest = 0, paletteOpening = false;
   function openPalette() {
     if (!palette) return;
-    palette.hidden = false;
-    if (paletteInput) { paletteInput.value = ""; paletteInput.focus(); }
-    pSeq++; pGo = 0;
-    searchPalette("");
+    var request = ++paletteRequest;
+    paletteOpening = true;
+    lazy("page-search").then(function (feature) {
+      paletteFeature = feature;
+      if (request === paletteRequest) { paletteOpening = false; feature.open(net, identity); }
+    }, function (error) {
+      if (request === paletteRequest) { closePalette(); setSave(error.message || String(error), true); }
+    });
   }
-  function followSelected() {
-    var item = !(pGo = pWait) && paletteItems[paletteSel];
-    if (!item) return;
-    location.href = "/edit/" + encodeURIComponent(item.slug) + "/";
+  function closePalette() {
+    paletteRequest++; paletteOpening = false;
+    if (paletteFeature) paletteFeature.close(); else if (palette) palette.hidden = true;
   }
   var paletteOpenBtn = document.getElementById("palette-open");
   if (paletteOpenBtn) paletteOpenBtn.addEventListener("click", openPalette);
-  if (paletteInput) {
-    var ptimer = null;
-    paletteInput.addEventListener("input", function () {
-      if (ptimer) clearTimeout(ptimer);
-      pSeq++; pWait = 1; paletteItems = []; renderPalette();
-      ptimer = setTimeout(function () { searchPalette(paletteInput.value); }, 180);
-    });
-    paletteInput.addEventListener("keydown", function (ev) {
-      if (ev.key === "ArrowDown") { ev.preventDefault(); paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1); renderPalette(); }
-      else if (ev.key === "ArrowUp") { ev.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); renderPalette(); }
-      else if (ev.key === "Enter") { ev.preventDefault(); followSelected(); }
-      else if (ev.key === "Escape") { ev.preventDefault(); palette.hidden = true; pSeq++; }
-    });
-  }
-  if (paletteList) paletteList.addEventListener("click", function (ev) {
-    var a = ev.target && ev.target.closest ? ev.target.closest("a") : null;
-    if (!a) return;
-    ev.preventDefault();
-    location.href = a.getAttribute("href");
-  });
-  if (palette) palette.addEventListener("mousedown", function (ev) {
-    if (ev.target === palette) palette.hidden = true;
-  });
 
   // --- 전역 단축키 ---
   document.addEventListener("keydown", function (ev) {
     var mod = ev.ctrlKey || ev.metaKey;
     // 블록 서식: Ctrl/Cmd + B(굵게) / I(기울임) / U(밑줄) / Shift+U(취소선) / E(코드)
-    var sel = window.getSelection();
+    var sel = mod && /^[biueBIUE]$/.test(ev.key) && window.getSelection();
     var inText = sel && sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest(".text");
-    if (mod && inText && (ev.key === "b" || ev.key === "B" || ev.key === "i" || ev.key === "I" || ev.key === "u" || ev.key === "U" || ev.key === "e" || ev.key === "E")) {
+    if (inText) {
       ev.preventDefault();
       if (ev.key === "b" || ev.key === "B") document.execCommand("bold");
       else if (ev.key === "i" || ev.key === "I") document.execCommand("italic");
@@ -2112,7 +1961,7 @@
     }
     if (mod && (ev.key === "k" || ev.key === "K")) {
       ev.preventDefault();
-      if (!palette.hidden) palette.hidden = true; else openPalette();
+      if (paletteOpening || !palette.hidden) closePalette(); else openPalette();
       return;
     }
     if (mod && ev.key === "/") {
@@ -2121,7 +1970,7 @@
       return;
     }
     if (ev.key === "Escape") {
-      palette.hidden = true;
+      closePalette();
       shortcutsEl.hidden = true;
       if (moreMenu) moreMenu.hidden = true;
     }
@@ -2239,6 +2088,7 @@
       setSave("저장됨", false);
       featureReady = true;
       emitFeature("ready", window.AcardEditor);
+      if (coreEditing) lazy("synced-blocks").catch(featureError);
     })
     .catch(function (error) {
       setSave(state.cacheLocked && !navigator.onLine ? "오프라인 · 읽기 전용. 다시 연결한 뒤 새로고침해 주세요." : "불러오기 실패: " + error.message, true);

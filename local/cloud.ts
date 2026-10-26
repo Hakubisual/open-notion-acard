@@ -15,7 +15,7 @@ const random = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
 
 export class CloudClient {
   private pending = new Map<string, Pending>();
-  constructor(private readonly cloud: string, private readonly dataDir: string, private readonly port: number) {}
+  constructor(private readonly cloud: string, private readonly dataDir: string, private readonly port: () => number) {}
 
   private get file() { return join(this.dataDir, "cloud-token.json"); }
   get enabled() { return Boolean(this.cloud); }
@@ -31,7 +31,7 @@ export class CloudClient {
   disconnect() { rmSync(this.file, { force: true }); }
 
   async start(): Promise<string> {
-    const redirect = "http://127.0.0.1:" + this.port + "/__local/cloud/callback";
+    const redirect = "http://127.0.0.1:" + this.port() + "/__local/cloud/callback";
     const reg = await fetch(this.cloud + "/oauth/register", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ client_name: "Acard 로컬판", redirect_uris: [redirect], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" }),

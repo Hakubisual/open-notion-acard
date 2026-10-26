@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 const pages = readFileSync(new URL("../assets/editor-pages-ui.js", import.meta.url), "utf8");
 const next = readFileSync(new URL("../editor-next/editor-next.js", import.meta.url), "utf8");
-const attachments = next.slice(next.indexOf("  function mountAttachments()"), next.indexOf("  function offerImage("));
+const attachments = next.slice(next.indexOf("  function mountAttachments()"), next.indexOf("  // --- Tables:"));
 
 for (const mode of ["classic", "next"]) test(mode + ": only three header chips, with working page actions in More", async () => {
   const browser = new Bun.WebView({ width: 390, height: 844 });

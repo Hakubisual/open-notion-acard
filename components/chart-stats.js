@@ -194,7 +194,7 @@ function chstBoxBody(d, h, W, H) {
   if (!groups.length) return null;
   const unit = h.str(d.yUnit, h.str(d.unit, "", 12), 12);
   const ys = chstRange(C, groups.flatMap((g) => [g.min, g.max, ...g.outliers]), 4, 0.08);
-  const ax = chstAxes(C, W, H, [0, groups.length], ys, h.str(d.xTitle, "그룹", 60), chstTitle(d, h, "y", "값", unit), groups.map((g) => g.label));
+  const ax = chstAxes(C, W, H, [0, groups.length], ys, h.str(d.xTitle, h.t("그룹", "Group"), 60), chstTitle(d, h, "y", h.t("값", "Value"), unit), groups.map((g) => g.label));
   const bw = Math.min(68, (W - ax.left - ax.right) / groups.length * 0.55);
   let body = ax.svg;
   groups.forEach((g, i) => {
@@ -220,7 +220,7 @@ registerComponent({
   render(d, h) {
     const wide = chstBoxBody(d, h, 640, 320), narrow = chstBoxBody(d, h, 360, 300);
     const caption = h.str(d.caption, "", 160);
-    const note = "상자: Q1–Q3, 선: 중앙값. 수염: 1.5 IQR 이내 관측값, 점: 이상값. 사전 계산값은 입력 수염을 사용합니다.";
+    const note = h.t("상자: Q1–Q3, 선: 중앙값. 수염: 1.5 IQR 이내 관측값, 점: 이상값. 사전 계산값은 입력 수염을 사용합니다.", "Box: Q1–Q3, line: median. Whiskers: values within 1.5 IQR, dots: outliers. Precomputed groups use the given whiskers.");
     return h.chart.figure("boxplot", { ...d, caption: caption ? caption + " · " + note : note }, h, wide ? { ...wide, narrow, label: "상자 그림" } : { empty: h.chart.EMPTY });
   },
 });

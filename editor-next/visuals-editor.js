@@ -1,4 +1,4 @@
-import { visualBlockHtml, VISUAL_MAX_HEIGHT } from "../visual-html.js";
+import { visualBlockHtml, VISUAL_MAX_HEIGHT, placeHeads, htmlHeadings } from "../visual-html.js";
 import { DIAGRAM_KINDS, CHART_TYPES, diagramToText, diagramFromText, chartToText, chartFromText, chartFromTable } from "./visual-forms.js";
 
 var TEMPLATES = {
@@ -39,7 +39,8 @@ function codeMount(host, block, save, note, back) {
   hint.textContent = HINT[block.type] || "";
   preview.className = "acv-preview";
   preview.setAttribute("aria-live", "polite");
-  function draw() { preview.innerHTML = visualBlockHtml(block, block.id); }
+  // true: an HTML block's headings get anchors beside the frame for the page TOC and outline (acv-f<id>-h<n>).
+  function draw() { preview.innerHTML = visualBlockHtml(block, block.id, true); }
   function changed() { block.meta = meta; save(); clearTimeout(timer); timer = setTimeout(draw, 250); }
   source.addEventListener("input", function () { block.text = source.value; changed(); });
   source.addEventListener("keydown", function (ev) { ev.stopPropagation(); });
@@ -202,7 +203,19 @@ function mount(host, block, save) {
 addEventListener("message", function (e) {
   var h = e.data && +e.data.acvH;
   if (!(h > 0)) return;
-  document.querySelectorAll(".acv-preview iframe.acv-frame:not(.acp-frame)").forEach(function (f) { if (f.contentWindow === e.source) f.style.height = Math.min(VISUAL_MAX_HEIGHT, h) + "px"; });
+  document.querySelectorAll(".acv-preview iframe.acv-frame:not(.acp-frame)").forEach(function (f) { if (f.contentWindow === e.source) { f.style.height = Math.min(VISUAL_MAX_HEIGHT, h) + "px"; placeHeads(f, e.data.acvT); } });
 });
 
 if (window.AcardEditor) window.AcardEditor.provide("visuals", { mount: mount, html: visualBlockHtml });
+// The editor's TOC blocks and outline list blocks through this: each HTML block becomes its headings, as heading
+// entries (h1 -> heading1, h4-h6 -> heading4) whose "block-" + id is the anchor beside the preview frame and whose
+// block is the HTML block. Then the TOCs drawn before this chunk loaded are repainted.
+window.AcardHtmlHeadings = function (blocks) {
+  var out = [];
+  blocks.forEach(function (b) {
+    if (b.type !== "html") return out.push(b);
+    htmlHeadings(b.text).forEach(function (h, i) { out.push({ id: b.id + "-h" + i, type: "heading" + Math.min(4, h.level), text: h.text, block: b.id }); });
+  });
+  return out;
+};
+if (window.AcardEditor && window.AcardEditor.paintTocs) window.AcardEditor.paintTocs();

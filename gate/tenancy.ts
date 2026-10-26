@@ -5,6 +5,9 @@
 export const OWNER_WS = "owner";
 
 type Kv = {
+  putStream?(key: string, body: ReadableStream, metadata: Record<string, unknown>): Promise<unknown>;
+  r2Object?(key: string, options?: unknown): Promise<unknown>;
+  r2Head?(key: string): Promise<unknown>;
   get(key: string, options?: unknown): Promise<unknown>;
   getWithMetadata(key: string, options?: unknown): Promise<{ value: unknown; metadata: unknown }>;
   put(key: string, value: unknown, options?: unknown): Promise<void>;
@@ -126,6 +129,9 @@ export function d1Adapter(stub: StoreStub, key: string, timing?: { n: number; ms
 
 export function prefixedKv(kv: Kv, prefix: string): Kv {
   return {
+    ...(kv.putStream ? { putStream: (key: string, body: ReadableStream, metadata: Record<string, unknown>) => kv.putStream!(prefix + key, body, metadata) } : {}),
+    ...(kv.r2Object ? { r2Object: (key: string, options?: unknown) => kv.r2Object!(prefix + key, options) } : {}),
+    ...(kv.r2Head ? { r2Head: (key: string) => kv.r2Head!(prefix + key) } : {}),
     get: (key, options) => kv.get(prefix + key, options),
     getWithMetadata: (key, options) => kv.getWithMetadata(prefix + key, options),
     put: (key, value, options) => kv.put(prefix + key, value, options),
@@ -138,8 +144,9 @@ export function prefixedKv(kv: Kv, prefix: string): Kv {
 }
 
 // Build output also contains the owner's notes (page HTML, seeds, search index, covers, avatars).
-// Other workspaces only get the app shell files.
-const MEMBER_ASSET = /^\/(?:[\w.-]+\.(?:css|js|svg|png|ico|webmanifest)|templates-seed\.json|editor\.html|agents\.html|acard-cli\.tgz|lazy\/[\w.-]+\.(?:css|js)|fonts\/lib\/[a-z]+\.css|_site\/[\w.-]+)$/;
+// Other workspaces only get the app shell files. The font files under /fonts/ are app shell too: the local server
+// (desktop app, self-host edition) reads every asset through here, and style.css loads /fonts/pretendard-core.woff2 (#145).
+const MEMBER_ASSET = /^\/(?:[\w.-]+\.(?:css|js|svg|png|ico|webmanifest)|templates-seed\.json|editor\.html|agents\.html|acard-cli\.tgz|lazy\/[\w.-]+\.(?:css|js)|fonts\/(?:lib\/[a-z]+|fonts|serif)\.css|fonts\/(?:[a-z0-9-]+\/)*[a-z0-9-]+\.woff2|_site\/[\w.-]+)$/;
 const OWNER_ONLY_ROOT = new Set(["/notes-seed.json", "/db-seed.json", "/search-index.json", "/index.html", "/404.html"]);
 
 export function memberAssetAllowed(pathname: string): boolean {

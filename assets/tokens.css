@@ -1,7 +1,7 @@
 /* Acard pastel tokens; contract in DESIGN.md. */
-@font-face{font-family:"Pretendard Core";font-display:optional;font-weight:45 920;src:url(/fonts/pretendard-core.woff2)format("woff2")}
+@font-face{font-family:"Pretendard Core";font-display:swap;font-weight:45 920;src:url(/fonts/pretendard-core.woff2)format("woff2")}
 @font-face{font-family:"Pretendard Fallback";src:local("Malgun Gothic"),local("Apple SD Gothic Neo"),local("Noto Sans KR"),local("Arial");size-adjust:94.2%;ascent-override:98%;descent-override:25%;line-gap-override:0%}
-@font-face{font-family:"JetBrains Mono";font-display:optional;font-weight:100 800;src:url(/fonts/jetbrains-mono.woff2)format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2190-2193,U+2212}
+@font-face{font-family:"JetBrains Mono";font-display:swap;font-weight:100 800;src:url(/fonts/jetbrains-mono.woff2)format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2190-2193,U+2212}
 :root {
   color-scheme: light;
   --bg: #ffffff;

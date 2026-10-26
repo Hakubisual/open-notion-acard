@@ -8,7 +8,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { join, normalize, resolve as resolvePath, sep } from "node:path";
 import core, { acardHost } from "../.build/acard-core.js";
 import { workspaceEnv } from "../gate/tenancy";
-import { isLang, type Lang } from "../gate/i18n";
+import { isLang, localizeJson, type Lang } from "../gate/i18n";
 import { licenseRoute } from "./edition";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createAcardMcpServer, OperationFailure, type AgentOperation } from "../agents/mcp-tools";
@@ -19,6 +19,7 @@ import { CLOUD_URL } from "./cloud-host";
 import { startAutoBackup } from "./auto-backup";
 import { startSync } from "./sync";
 import { openapiSpec, agentsMd, llmsTxt } from "../agent-docs.js";
+import { agentTokens, liteAgentsMd, LITE_AGENT, liteMcp, liteRoute, liteShell, skillPage, skillRoute } from "./lite";
 
 // The local half of the live feed the app already listens to (assets/features/lazy/live.js, /api/live on notes.example.com):
 // hello with the last id and anything missed, then change notices. Sync uses it so pages that arrive from another PC
@@ -48,7 +49,8 @@ const CLOUD_ONLY = "This feature needs the hosted service and is not available o
 // host: listen address (default 127.0.0.1). allowedHosts: extra Host names (LAN IP, DNS name) or "*".
 // password: when set, every page needs a login (/__local/login). Required whenever host is not loopback.
 // lang: UI language for app pages (en / ko / zh). Unset keeps the Korean source copy.
-export type LocalOptions = { dataDir: string; appDir: string; port: number; host?: string; allowedHosts?: string[]; password?: string; lang?: string; cloudUrl?: string; localApi?: boolean; agentToken?: string };
+// lite: the desktop app's light local mode (local/lite.ts): plain markdown pages, agents only with <data>/agent-token.
+export type LocalOptions = { dataDir: string; appDir: string; port: number; host?: string; allowedHosts?: string[]; password?: string; lang?: string; cloudUrl?: string; localApi?: boolean; agentToken?: string; lite?: boolean };
 
 function clean(params: unknown[] = []) {
   return params.map((v) => (v === undefined ? null : v === true ? 1 : v === false ? 0 : v)) as any[];
@@ -163,7 +165,7 @@ function folderAssets(appDir: string) {
   };
 }
 
-export function localEnv({ dataDir, appDir }: LocalOptions) {
+export function localEnv({ dataDir, appDir, lang }: LocalOptions) {
   mkdirSync(dataDir, { recursive: true });
   const db = new Database(join(dataDir, "acard.sqlite"), { create: true });
   db.run("PRAGMA journal_mode = WAL");
@@ -176,6 +178,8 @@ export function localEnv({ dataDir, appDir }: LocalOptions) {
     WORKSPACE: { idFromName: (name: string) => name, get: () => store },
     AI: { run: async () => { throw new Error(CLOUD_ONLY); } },
     ACARD_LOCAL: "1",
+    // Data the app makes on its own (the example pages, the home page title) follows the UI language (issue 147).
+    ...(isLang(lang) && lang !== "ko" ? { ACARD_LANG: lang } : {}),
   };
   const env = acardHost.trust(workspaceEnv(base as any, LOCAL_WS));
   return { env, assets: base.ASSETS, close: () => { db.close(); kvDb.close(); } };
@@ -320,7 +324,7 @@ const SIDE_AGENTS = '<a class="icon" href="/settings/agents/" aria-label="에이
 const SIDE_LOGOUT = /<form method="POST" action="\/__logout" class="side-logout">[\s\S]*?<\/form>/;
 export async function localShell(response: Response, passwordOn: boolean): Promise<Response> {
   if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
-  const html = await response.text();
+  const html = (await response.text()).replace(/<html\b/i, '<html data-acard-local');
   if (!html.includes(SIDE_AGENTS)) return new Response(html, { status: response.status, statusText: response.statusText, headers: response.headers });
   let out = html.replace(SIDE_AGENTS, '<a class="icon" href="/__local/cloud" aria-label="내 데이터" title="내 데이터">');
   out = passwordOn ? out.replace(SIDE_LOGOUT, '<form method="POST" action="/__local/logout" class="side-logout"><button class="icon" type="submit" aria-label="로그아웃" title="로그아웃">' + (SIDE_LOGOUT.exec(out)?.[0].match(/<svg[\s\S]*<\/svg>/)?.[0] ?? "") + "</button></form>") : out.replace(SIDE_LOGOUT, "");
@@ -349,7 +353,57 @@ function withScriptSelf(response: Response): Response {
   return response;
 }
 
-export function startServer(options: LocalOptions) {
+// Light mode routes, answered before the full app's: agent paths need the app's token (and no foreign Origin), page
+// addresses get the plain markdown reader, /__local/skill is the AI connection screen. Everything else falls through.
+export function liteMode(env: unknown, options: LocalOptions, edited: () => void, changed: (slugs: string[]) => void) {
+  const tokens = agentTokens(options.dataDir);
+  let lastAgentAt: number | null = null;
+  const run = async (operation: string, input: Record<string, unknown>) => {
+    try {
+      return await acardHost.run(env as never, LITE_AGENT, operation as AgentOperation, input);
+    } catch (error) {
+      if (acardHost.isAgentError(error)) throw new OperationFailure(error.message, error.status);
+      throw error;
+    }
+  };
+  const mcp = liteMcp(run);
+  const internal = (path: string, init: RequestInit = {}) => {
+    const origin = "http://127.0.0.1:" + options.port;
+    return Promise.resolve(core.fetch(new Request(origin + path, { ...init, headers: { origin, "content-type": "application/json" } }), env));
+  };
+  const deny = (status: number, error: string) => Response.json({ error }, { status });
+  return async (request: Request, url: URL): Promise<Response | null> => {
+    const method = request.method.toUpperCase();
+    if (AGENT_PATHS.test(url.pathname)) {
+      if (!sameOrigin(request, options.port, options.allowedHosts)) return deny(403, "Requests from other sites are not accepted.");
+      const token = /^Bearer (\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
+      if (!token || !tokens.matches(token)) return deny(401, "Acard 앱의 AI 연결 화면에 있는 토큰이 필요해요.");
+      if (request.headers.get("x-acard-check") !== "1") lastAgentAt = Date.now();
+      if (method === "GET" && (url.pathname === "/AGENTS.md" || url.pathname === "/llms.txt")) return new Response(liteAgentsMd(url.origin), { headers: { "content-type": "text/markdown; charset=utf-8" } });
+      if (method === "GET" && url.pathname === "/api/v1/openapi.json") return Response.json(openapiSpec(url.origin));
+      const res = url.pathname === "/mcp" ? await mcp(request) : await acardHost.serveV1(request, env as never, LITE_AGENT);
+      if (method === "POST" || method === "PUT" || method === "PATCH") { edited(); changed([]); }
+      return res;
+    }
+    // Every other write must come from the app's own pages (a browser always sends Origin on POST/PUT/DELETE), so a
+    // program on this PC without the token cannot write through the app's internal API either.
+    if (!["GET", "HEAD", "OPTIONS"].includes(method) && !request.headers.get("origin")) return deny(401, "Acard 앱의 AI 연결 화면에 있는 토큰이 필요해요.");
+    if (url.pathname === "/__local/skill" || url.pathname === "/__local/skill/") return skillPage();
+    if (url.pathname.startsWith("/__local/skill/")) return skillRoute(request, url, tokens, () => lastAgentAt);
+    if (url.pathname.startsWith("/__local/lite/")) {
+      const res = await liteRoute(request, url, internal);
+      if (res && method !== "GET" && res.ok) { edited(); changed([]); }
+      return res;
+    }
+    const pageAddress = /^\/(?:edit\/)?(?:[^/.]+\/?)?$/.test(url.pathname) && !url.pathname.startsWith("/__") && !/^\/(?:api|settings|login|signup|oauth|mcp|sse)\b/.test(url.pathname);
+    if (method === "GET" && pageAddress) return liteShell();
+    return null;
+  };
+}
+
+export function startServer(given: LocalOptions) {
+  // Port 0 lets the OS pick a free port; options.port becomes the bound port right after Bun.serve, before any request.
+  const options = { ...given };
   const host = options.host || "127.0.0.1";
   if (!LOOPBACK.has(host) && !options.password) throw new Error("Listening on " + host + " needs a password (ACARD_PASSWORD).");
   // A new data folder starts with the example pages instead of one empty page (the same pair notes.example.com offers).
@@ -365,7 +419,7 @@ export function startServer(options: LocalOptions) {
   // Archive restore writes tables the core creates on its first API call, so make sure that call has happened.
   const ready = async () => { await acardHost.prepare(env); };
   const archiveEnv = { DB: (env as any).DB, MEDIA: (env as any).MEDIA };
-  const cloud = new CloudClient(options.cloudUrl ?? CLOUD_URL, options.dataDir, options.port);
+  const cloud = new CloudClient(options.cloudUrl ?? CLOUD_URL, options.dataDir, () => options.port);
   const auto = startAutoBackup({ env: archiveEnv, dataDir: options.dataDir, ready, cloud });
   const live = liveFeed();
   let server: ReturnType<typeof Bun.serve<{ since: number }>> | null = null;
@@ -376,6 +430,10 @@ export function startServer(options: LocalOptions) {
   const gate = options.password ? passwordGate(options.dataDir, options.password) : null;
   const agentDigest = options.agentToken ? createHash("sha256").update(options.agentToken).digest() : null;
   const lang: Lang | null = isLang(options.lang) ? options.lang : null;
+  const lite = options.lite ? liteMode(env, options, () => sync.edited(), (slugs) => {
+    const event = live.next(["tree", "page"], slugs);
+    server?.publish("live", JSON.stringify({ type: "change", ...event }));
+  }) : null;
   server = Bun.serve<{ since: number }>({
     hostname: host,
     port: options.port,
@@ -390,6 +448,10 @@ export function startServer(options: LocalOptions) {
       if (blocked) return blocked;
       await seeding;
       const url = new URL(request.url);
+      if (lite) {
+        const handled = await lite(request, url);
+        if (handled) return handled;
+      }
       const agentPath = AGENT_PATHS.test(url.pathname);
       let agentAuthenticated = false;
       if (agentPath) {
@@ -457,12 +519,14 @@ export function startServer(options: LocalOptions) {
           : await core.fetch(request, env);
         if (request.method !== "GET" && request.method !== "HEAD" && raw.ok && url.pathname.startsWith("/api/")) sync.edited();
         const response = await localShell(raw, Boolean(gate));
-        return lang ? await withLang(response, lang) : response;
+        // API errors with an err.* entry come in the UI language too (the hosted entry does the same per request).
+        return lang ? await withLang(raw.ok ? response : await localizeJson(response, lang), lang) : response;
       } catch (error) {
         console.error("acard local request failed", error);
         return new Response("Something went wrong.", { status: 500 });
       }
     },
   });
+  options.port = server.port!;
   return { server, sync, close: () => { auto.stop(); sync.stop(); server!.stop(true); close(); } };
 }

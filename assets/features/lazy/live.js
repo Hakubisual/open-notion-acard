@@ -11,6 +11,61 @@
   var CID = "c" + Math.random().toString(36).slice(2, 12);
   var api = { events: [], status: "idle", client: CID };
   window.AcardLive = api;
+  function adoptRemote(remote) {
+    var ed = window.AcardEditor, state = ed.state;
+    if (remote.updated < state.baseUpdated) return "stale";
+    if (state.dirty || state.saving || (window.AcardEditor.saveQueue && !window.AcardEditor.saveQueue.canAdoptRemote())) return "busy";
+    var documentText = JSON.stringify({ title: remote.title, blocks: remote.blocks });
+    var same = documentText === JSON.stringify({ title: state.title, blocks: state.blocks });
+    if (same && remote.updated === state.baseUpdated) return "unchanged";
+    var selection = ed.captureSelection();
+    if (window.AcardEditor.saveQueue && !window.AcardEditor.saveQueue.acceptRemote(remote)) return "busy";
+    state.title = remote.title; state.blocks = JSON.parse(JSON.stringify(remote.blocks));
+    state.baseUpdated = remote.updated;
+    window.AcardEditor.base = { title: remote.title, blocks: JSON.parse(JSON.stringify(remote.blocks)), updated: remote.updated };
+    ed.remoteHistory(remote);
+    if (!same) { ed.render(); ed.restoreSelection(selection); }
+    state.dirty = false; ed.setSave("저장됨", false);
+    return same ? "unchanged" : "applied";
+  }
+  if (window.AcardEditor) window.AcardEditor.adoptRemote = adoptRemote;
+  if (window.AcardEditor) window.AcardEditor.restoreDraft = async function (draft) {
+    var editor = window.AcardEditor;
+    await editor.lazy("editor-selection");
+    var before = JSON.stringify({ title: editor.state.title, blocks: editor.state.blocks });
+    var entry;
+    try {
+      entry = await editor.saveQueue.stageRecovery(draft);
+      if (!editor.saveQueue.isCurrent() || editor.state.dirty || editor.state.saving
+        || JSON.stringify({ title: editor.state.title, blocks: editor.state.blocks }) !== before) throw Error("Draft changed while recovering");
+    } catch (error) {
+      if (editor.state.dirty && editor.saveQueue.isCurrent()) editor.saveQueue.continueDraft();
+      throw error;
+    }
+    var payload = entry.payload;
+    editor.state.title = payload.title;
+    editor.state.blocks = JSON.parse(JSON.stringify(payload.blocks));
+    editor.state.baseUpdated = entry.base_updated;
+    editor.state.recoveredDraft = true;
+    editor.remoteHistory();
+    editor.render();
+    editor.state.dirty = true;
+    editor.saveQueue.continueDraft();
+  };
+  if (window.AcardEditor) window.AcardEditor.resolveRemote = async function () {
+    var editor = window.AcardEditor;
+    try {
+      await editor.lazy("editor-selection");
+      var archived = await editor.saveQueue.archiveAndClear();
+      var before = JSON.stringify({ title: editor.state.title, blocks: editor.state.blocks });
+      var data = await editor.api("/page/" + encodeURIComponent(editor.slug));
+      if (JSON.stringify({ title: editor.state.title, blocks: editor.state.blocks }) !== before || !editor.saveQueue.canAdoptRemote()) throw Error("수정이 계속되고 있어요. 내 초안은 보관했어요.");
+      editor.state.dirty = false;
+      var result = editor.adoptRemote({ title: data.page.title, blocks: data.blocks || [], updated: data.page.updated });
+      if (result === "busy" || result === "stale") { editor.state.dirty = true; throw Error("새 내용을 다시 확인해 주세요. 내 초안은 보관했어요."); }
+      return { result: result, archive: archived };
+    } catch (error) { editor.saveQueue.continueDraft(); throw error; }
+  };
 
   document.addEventListener("input", function () { lastInput = Date.now(); }, true);
   document.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
@@ -88,14 +143,12 @@
   function editorState() { return window.AcardEditor && window.AcardEditor.state; }
   function snapshot(state) { return JSON.stringify({ t: state.title, b: state.blocks }); }
 
-  function applyEditor(data) {
+  async function applyEditor(data) {
     var ed = window.AcardEditor, state = editorState();
     if (!ed || !state || !data || !data.page) return;
-    state.title = data.page.title;
-    state.blocks = (data.blocks || []).length ? data.blocks : state.blocks;
-    var title = document.getElementById("title");
-    if (title && document.activeElement !== title) title.value = state.title;
-    ed.render();
+    if (ed.lazy) await ed.lazy("editor-selection");
+    var result = ed.adoptRemote({ title: data.page.title, blocks: data.blocks || [], updated: data.page.updated });
+    if (result === "busy") { showBar(data); return; }
     hideBar();
   }
 
@@ -105,7 +158,7 @@
     fetch("/api/page/" + encodeURIComponent(slug), { credentials: "same-origin", cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
       if (!data || !data.page) return;
       var now = editorState();
-      if (snapshot({ title: data.page.title, blocks: data.blocks || [] }) === snapshot(now)) { hideBar(); return; }
+      if (snapshot({ title: data.page.title, blocks: data.blocks || [] }) === snapshot(now)) { applyEditor(data); return; }
       // issue 109: this tab's own save also comes back as a notice (the first save can go out before this file set the client
       // id). A version no newer than the one this tab last saved is not someone else's change; one still being saved
       // is checked again once that save settles.
@@ -137,8 +190,11 @@
       view.style.cssText = "border:0;border-radius:999px;padding:4px 12px;background:var(--accent,#7c5cff);color:#fff;font:inherit;cursor:pointer";
       view.onclick = function () {
         var state = editorState();
-        if (state && state.dirty && !window.confirm("아직 저장되지 않은 내 수정이 있어요. 새 내용으로 바꿀까요?")) return;
-        if (state) state.dirty = false;
+        if (state && (state.dirty || !window.AcardEditor.saveQueue.canAdoptRemote())) {
+          if (!window.confirm("내 수정은 기기에 초안으로 보관하고 서버 내용을 볼까요?")) return;
+          window.AcardEditor.resolveRemote().then(function () { hideBar(); }, function (error) { window.AcardEditor.setSave(error.message, true); });
+          return;
+        }
         fetch("/api/page/" + encodeURIComponent(slug), { credentials: "same-origin", cache: "no-store" }).then(function (r) { return r.ok ? r.json() : pending; }, function () { return pending; }).then(applyEditor);
       };
       bar.append(text, view);
@@ -147,6 +203,37 @@
     bar.hidden = false;
   }
   function hideBar() { if (bar) bar.hidden = true; pending = null; }
+  if (window.AcardEditor && window.AcardEditor.coreEditing) window.AcardEditor.on("ready", function () {
+    var editor = window.AcardEditor, menu = document.getElementById("more-menu");
+    if (!menu) return;
+    var button = document.createElement("button"); button.type = "button"; button.className = "menuitem"; button.textContent = "보관한 초안";
+    button.onclick = async function () {
+      var drafts = (await editor.saveQueue.recoveryDrafts()).filter(function (draft) { return draft.slug === editor.slug; });
+      var dialog = document.createElement("dialog"); dialog.className = "editor-panel";
+      var title = document.createElement("h2"); title.textContent = "보관한 초안";
+      var close = document.createElement("button"); close.type = "button"; close.className = "mini"; close.textContent = "닫기"; close.onclick = function () { dialog.close(); };
+      dialog.append(title, close);
+      var note = document.createElement("p"); note.textContent = drafts.length ? "초안을 복구하거나 파일로 보관하세요. 저장 충돌 시 원본 초안은 유지됩니다." : "보관한 초안이 없어요."; dialog.appendChild(note);
+      var status = document.createElement("p"); status.setAttribute("role", "status"); dialog.appendChild(status);
+      drafts.forEach(function (draft) {
+        var row = document.createElement("p"), download = document.createElement("button"); download.type = "button"; download.className = "mini";
+        download.textContent = new Date(draft.archived || draft.updated).toLocaleString() + " · " + draft.payload.title;
+        download.onclick = function () {
+          var url = URL.createObjectURL(new Blob([JSON.stringify(draft.payload, null, 2)], { type: "application/json" }));
+          var link = document.createElement("a"); link.href = url; link.download = draft.slug + "-draft.json"; link.click(); URL.revokeObjectURL(url);
+        };
+        var restore = document.createElement("button"); restore.type = "button"; restore.className = "mini"; restore.textContent = "초안 복구";
+        restore.onclick = async function () {
+          restore.disabled = true;
+          try { await editor.restoreDraft(draft); dialog.close(); }
+          catch (error) { status.textContent = editor.state.dirty ? "현재 변경을 저장한 뒤 초안을 복구해 주세요." : error.message; restore.disabled = false; }
+        };
+        row.append(download, restore); dialog.appendChild(row);
+      });
+      dialog.addEventListener("close", function () { dialog.remove(); }); document.body.appendChild(dialog); menu.hidden = true; dialog.showModal();
+    };
+    menu.appendChild(button);
+  });
 
   // Notices that arrive together (a burst of agent writes, the backlog replayed after a reconnect) are applied as one
   // batch on the next frame: one cache sweep, one tree read and at most one page re-read for the whole batch.
@@ -266,7 +353,9 @@
   if (window.AcardEditor) window.AcardEditor.clientId = CID;
   if (window.AcardEditor && window.AcardEditor.on) window.AcardEditor.on("saved", function () {
     if (channel) channel.postMessage({ id: 0, t: Date.now(), kinds: ["page", "title"], slugs: [slug] });
+    if (pending) refreshEditor();
   });
+  window.addEventListener("saveQueueIdle", function () { if (pending) refreshEditor(); });
 
   api.open = open;
   api.close = close;

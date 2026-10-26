@@ -25,7 +25,7 @@
     ".sv-bar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;height:52px;padding:0 20px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}" +
     ".sv-path{display:flex;align-items:center;gap:8px;min-width:0;font-size:var(--fs-14)}.sv-crumb{display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--fg);text-decoration:none}.sv-crumb span:last-child,.sv-here{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".sv-ico{display:inline-grid;place-items:center;width:22px;height:22px;flex:0 0 22px}.sv-ico img,.sv-ico svg{width:20px;height:20px;border-radius:5px}.sv-sep{color:var(--fg-dim)}.sv-here{color:var(--fg-dim)}.sv-grow{flex:1}" +
-    ".sv-made{display:inline-flex;align-items:baseline;gap:2px;color:var(--fg);font-size:var(--fs-13);line-height:1;text-decoration:none;white-space:nowrap}.sv-wm{display:block;height:13px;aspect-ratio:375.59/100;overflow:visible;color:currentColor}.sv-made span{display:block;line-height:1;margin-bottom:-0.12em}.sv-made:hover{text-decoration:underline}" +
+    ".sv-made{display:inline-flex;align-items:baseline;gap:2px;color:var(--fg);font-size:var(--fs-13);line-height:1;text-decoration:none;white-space:nowrap}.sv-wm{display:block;height:13px;aspect-ratio:375.59/100;overflow:visible;color:currentColor}.sv-made span{display:block;line-height:1;margin-bottom:-0.12em}.sv-made .sv-pre{margin-right:4px}.sv-made:hover{text-decoration:underline}" +
     ".sv-theme{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:8px;color:var(--fg-dim);cursor:pointer}.sv-theme:hover{background:var(--bg-soft);color:var(--fg)}.sv-tt:focus-visible~.sv-bar .sv-theme{outline:2px solid var(--accent)}" +
     ".sv-notice{max-width:460px;margin:14vh auto 0;padding:0 24px;text-align:center}.sv-code{margin:0;color:var(--accent);font-weight:700;font-size:var(--fs-14);letter-spacing:.08em}.sv-notice h1{margin:8px 0 10px;font-size:var(--fs-28);letter-spacing:-.02em}.sv-notice p{color:var(--fg-dim)}" +
     ".sv-edit{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4);margin:calc(var(--space-8) * -1 + var(--space-2)) 0 var(--space-8);color:var(--fg-dim);font-size:var(--fs-13)}.sv-edit .sv-btn{margin-top:0}" +
@@ -47,14 +47,20 @@
     ".sv-toc{position:sticky;top:76px;align-self:start;margin-top:28px;max-height:calc(100dvh - 96px);overflow:auto;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);font-size:var(--fs-14)}" +
     ".sv-toc summary{cursor:pointer;font-weight:700;font-size:var(--fs-16);list-style:none;display:flex;justify-content:space-between}.sv-toc summary::after{content:'\\2303';color:var(--fg-dim)}.sv-toc details:not([open]) summary::after{content:'\\2304'}" +
     ".sv-toc ol{list-style:none;margin:10px 0 0;padding:0}.sv-toc li a{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;color:var(--fg);text-decoration:none;line-height:1.4}.sv-toc li a:hover{background:var(--accent-soft);color:var(--accent-strong)}" +
-    ".sv-toc .n{flex:0 0 22px;height:22px;display:grid;place-items:center;border-radius:6px;background:var(--bg-soft);color:var(--fg-dim);font-size:var(--fs-12)}.sv-toc .l3 a{padding-left:20px}.sv-toc .l4 a{padding-left:32px}.sv-toc .l5 a{padding-left:44px}" +
+    ".sv-toc .l3 a{padding-left:20px}.sv-toc .l4 a{padding-left:32px}.sv-toc .l5 a{padding-left:44px}" +
     ".sv-subs{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}.sv-subs h2{margin:0 0 14px;font-size:var(--fs-21)}.sv-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}" +
     ".sv-card{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);text-decoration:none;transition:border-color .15s,box-shadow .15s}.sv-card:hover{border-color:var(--accent);box-shadow:0 6px 18px rgba(30,28,50,.08)}" +
     ".sv-cico{flex:0 0 40px;height:40px;display:grid;place-items:center;border-radius:10px;background:var(--accent-soft);color:var(--accent)}.sv-cico img,.sv-cico svg{width:22px;height:22px}.sv-ct{display:flex;flex-direction:column;gap:3px;min-width:0}.sv-ct b{font-size:var(--fs-15)}.sv-ct small{color:var(--fg-dim);font-size:var(--fs-13);line-height:1.5}" +
     ".sv-foot{display:flex;justify-content:center;padding:28px 0 40px;border-top:1px solid var(--line)}.sv-foot a{display:inline-flex;gap:8px;align-items:center;color:var(--fg-dim);font-size:var(--fs-13);text-decoration:none}" +
     ".sv-wrap:not(.sv-normal,.sv-full):has(.blocks :is(.cols,.table-section,.ui-card-grid,.ui-compare,.ui-stat-row)){grid-template-columns:minmax(0,1170px)}.sv-main article:has(.blocks :is(.cols,.table-section,.ui-card-grid,.ui-compare,.ui-stat-row)){max-width:none}.sv-main .blocks:has(.cols,.table-section,.ui-card-grid,.ui-compare,.ui-stat-row){max-width:1170px}@media (min-width:1100px){.sv-wrap.has-toc:not(.sv-normal,.sv-full):has(.blocks :is(.cols,.table-section,.ui-card-grid,.ui-compare,.ui-stat-row)){grid-template-columns:minmax(0,1170px) 240px}}" +
     ".sv-main [id]{scroll-margin-top:72px}.sv-toc-narrow{display:none}html{scroll-padding-top:72px}.sv-wrap.sv-normal{grid-template-columns:minmax(0,1170px)}.sv-wrap.sv-normal.has-toc{grid-template-columns:minmax(0,1170px) 240px}.sv-wrap.sv-full{grid-template-columns:minmax(0,1fr);padding:0 48px 72px}.sv-wrap.sv-full.has-toc{grid-template-columns:minmax(0,1fr) 240px}@media (max-width:1099px){.sv-toc-narrow{display:block}.sv-wrap.sv-normal.has-toc,.sv-wrap.sv-full.has-toc{grid-template-columns:minmax(0,1fr)}.sv-toc-wide{display:none}.sv-wrap.has-toc{grid-template-columns:minmax(0,760px)}.sv-toc{position:static;max-height:none;margin:0 0 8px}}" +
-    "@media (max-width:640px){.sv-wrap.sv-full{padding:0 18px 56px}.sv-bar{padding:0 12px;gap:8px}.sv-made span{display:none}.sv-cover .pagecover{height:132px}.sv-cover .brandcover img{width:90px;height:90px;top:20px}.sv-wrap{padding:0 18px 56px}.sv-icon{width:64px;height:64px;margin-top:-32px;border-radius:var(--radius-md)}.sv-icon img{width:44px;height:44px}.sv-title{font-size:var(--fs-28)}.sv-meta{font-size:var(--fs-13);margin-bottom:var(--space-6)}.sv-main .blocks>h2{margin-top:var(--space-10)}}" +
+    // issue 172: a page whose body carries its own TOC block showed two TOCs. Wide: the sidebar TOC stays and the body
+    // block hides; narrow: the body block stays (it sits where the author put it) and the copy above the body hides.
+    "@media (min-width:1100px){.sv-wrap.has-toc .blocks .tocblock{display:none}}@media (max-width:1099px){.sv-main:has(.blocks .tocblock) .sv-toc-narrow{display:none}}" +
+    // Phone: the access pill wraps under the date, so the hairline between them would hang alone at the left edge and push
+    // the pill in (owner, slack C0C91GZDVC7 1792804368.175249); the row gap separates them instead, and the ask button keeps
+    // the same 8 px under the meta row as on desktop instead of touching the pill.
+    "@media (max-width:640px){.sv-wrap.sv-full{padding:0 18px 56px}.sv-bar{padding:0 12px;gap:8px}.sv-made span{display:none}.sv-cover .pagecover{height:132px}.sv-cover .brandcover img{width:90px;height:90px;top:20px}.sv-wrap{padding:0 18px 56px}.sv-icon{width:64px;height:64px;margin-top:-32px;border-radius:var(--radius-md)}.sv-icon img{width:44px;height:44px}.sv-title{font-size:var(--fs-28)}.sv-meta{font-size:var(--fs-13);margin-bottom:var(--space-6)}.sv-meta .sv-when+.sv-pill{padding-left:0;border-left:0}.sv-edit{margin-top:calc(var(--space-6) * -1 + var(--space-2))}.sv-main .blocks>h2{margin-top:var(--space-10)}}" +
     ".blocks figure.img picture{display:block}.blocks figure.img img[height]{height:auto}.sv-cover .pagecover picture{display:contents}" +
     "@media print{.sv-bar,.sv-toc,.sv-foot,.sv-tt{display:none!important}.sv-cover .pagecover{height:120px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sv-wrap{display:block;padding:0}.sv-card{break-inside:avoid}a{color:inherit}}";
   const SESSION_S = 30 * 24 * 60 * 60;
@@ -71,7 +77,7 @@
   const wsTag = env => (!env.ACARD_WORKSPACE || env.ACARD_WORKSPACE === "owner" ? "o" : env.ACARD_WORKSPACE);
   const sharePrefix = env => env.ACARD_SHARE_PREFIX || "/p/";
   const reply = (body, status = 200, extra = {}) => new Response(JSON.stringify(body), { status, headers: { ...noStore, "content-type": "application/json; charset=utf-8", ...extra } });
-  const page401 = (message, extra = {}, request = "") => new Response(shell("권한이 없어요", "<h1>권한이 없어요</h1><p>" + escapeHtml(message) + "</p>" + (request ? '<p><a href="' + escapeHtml(request) + '">권한 요청하기</a></p>' : "")), { status: 401, headers: { ...noStore, "content-type": "text/html; charset=utf-8", ...extra } });
+  const page401 = (message, extra = {}, request = "", lang = "ko") => new Response(shell(svT(lang, "권한이 없어요"), "<h1>" + svT(lang, "권한이 없어요") + "</h1><p>" + escapeHtml(svT(lang, message)) + "</p>" + (request ? '<p><a href="' + escapeHtml(request) + '">' + svT(lang, "권한 요청하기") + "</a></p>" : ""), lang), { status: 401, headers: { ...noStore, "content-type": "text/html; charset=utf-8", ...extra } });
 
   async function hmacToken(env, label) {
     if (!env.GATE_SECRET) throw new Error("share secret is not configured");
@@ -82,8 +88,33 @@
   // again later while the database keeps only their SHA-256.
   const ruleToken = (env, rule) => hmacToken(env, "share-url:" + (env.ACARD_WORKSPACE || "owner") + ":" + rule);
 
-  function shell(title, body) {
-    return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>' + escapeHtml(title) + " · Acard</title>" +
+  // issue 165: a shared page names its files with a signed address that runs out (?k=<unix seconds>.<HMAC>), so a file URL
+  // copied out of the page stops working after a few hours. The end is rounded to the hour (the page's edge-cached HTML
+  // stays the same within an hour) and is 2-3 hours away. The old unsigned address still works for as long as the share
+  // rule does: it is answered with a redirect to a fresh signed one, so pages and links saved before keep their pictures.
+  const MEDIA_SIG_HOUR = 3600;
+  const MEDIA_SIG_LEAD = 2 * MEDIA_SIG_HOUR;
+  const MEDIA_SIG_MAX = 3 * MEDIA_SIG_HOUR;
+  const mediaSig = (env, token, id, ends) => hmacToken(env, "share-media:" + (env.ACARD_WORKSPACE || "owner") + ":" + token + ":" + id + ":" + ends);
+  async function mediaQuery(env, token, id, now = Date.now()) {
+    const ends = (Math.floor(now / 1000 / MEDIA_SIG_HOUR) * MEDIA_SIG_HOUR) + MEDIA_SIG_LEAD + MEDIA_SIG_HOUR;
+    return "?k=" + ends + "." + await mediaSig(env, token, id, ends);
+  }
+  // "ok", "missing" (an old unsigned address) or "bad" (forged, for another file or link, or run out).
+  async function mediaSigState(env, token, id, given, now = Date.now()) {
+    if (given === null) return "missing";
+    const m = /^(\d{1,12})\.([A-Za-z0-9_-]{43})$/.exec(given);
+    if (!m) return "bad";
+    const ends = Number(m[1]);
+    if (ends * 1000 <= now || ends * 1000 > now + MEDIA_SIG_MAX * 1000) return "bad";
+    const want = await mediaSig(env, token, id, ends);
+    let diff = 0;
+    for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ m[2].charCodeAt(i);
+    return diff === 0 ? "ok" : "bad";
+  }
+
+  function shell(title, body, lang = "ko") {
+    return '<!doctype html><html lang="' + SV_LANG[lang].html + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>' + escapeHtml(title) + " · Acard</title>" +
       "<style>body{margin:0;font:var(--fs-16,16px)/1.6 system-ui,-apple-system,'Segoe UI',sans-serif;background:linear-gradient(160deg,#eefbfd,#f6f2ff);color:#24223a;min-height:100vh;display:grid;place-items:center}" +
       "main{width:min(420px,calc(100% - 32px));background:#fff;border:1px solid #e6e3f2;border-radius:18px;padding:28px;box-shadow:0 18px 50px rgba(60,50,120,.12)}h1{font-size:var(--fs-21,21px);margin:0 0 10px}p{color:#5d5a75}" +
       "label{display:block;font-size:var(--fs-14,14px);margin:14px 0 6px}input,select,textarea{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid #d9d5ea;border-radius:10px;font:inherit}" +
@@ -169,6 +200,11 @@
     ["POST", new RegExp(P + "\\/rename$"), "edit"],
     ["POST", new RegExp(P + "\\/move$"), "move"],
     ["PATCH", new RegExp(P + "\\/blocks$"), "edit"],
+    ["POST", new RegExp(P + "\\/move-blocks$"), "edit"],
+    ["GET", new RegExp(P + "\\/synced$"), "read"],
+    ["POST", new RegExp(P + "\\/synced$"), "edit"],
+    ["PATCH", new RegExp(P + "\\/synced\\/[^/]+$"), "edit"],
+    ["POST", new RegExp(P + "\\/synced\\/[^/]+\\/detach$"), "edit"],
     ["POST", new RegExp(P + "\\/button\\/[^/]+$"), "edit"],
     ["GET", new RegExp(P + "\\/settings$"), "read"],
     ["PUT", new RegExp(P + "\\/settings$"), "edit"],
@@ -223,7 +259,7 @@
     if (!db) return reply({ error: "저장소가 연결되지 않았어요." }, 503);
     await ensureSchema(db);
     const session = await readSession(db, env.ACARD_GUEST_TOKEN);
-    if (!session) return url.pathname.startsWith("/api/") ? reply({ error: "공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요." }, 401, { "set-cookie": clearCookie }) : page401("공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요.", { "set-cookie": clearCookie });
+    if (!session) return url.pathname.startsWith("/api/") ? reply({ error: "공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요." }, 401, { "set-cookie": clearCookie }) : page401("공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요.", { "set-cookie": clearCookie }, "", svLang(request));
     const method = request.method.toUpperCase();
     const path = url.pathname;
     const model = await loadModel(db);
@@ -233,7 +269,7 @@
     const visible = new Set(roles.keys());
     const roleOf = slug => roles.get(slug) || "none";
     const route = matchGuestRoute(method, path, url);
-    const denied = message => path.startsWith("/api/") ? reply({ error: message || "이 페이지에 대한 권한이 없어요." }, 401) : page401(message || "이 페이지를 볼 권한이 없어요. 공유한 사람에게 권한을 요청해 주세요.", {}, route.slug && method === "GET" ? "/s/" + wsTag(env) + "/r/" + encodeURIComponent(route.slug) : "");
+    const denied = message => path.startsWith("/api/") ? reply({ error: message || "이 페이지에 대한 권한이 없어요." }, 401) : page401(message || "이 페이지를 볼 권한이 없어요. 공유한 사람에게 권한을 요청해 주세요.", {}, route.slug && method === "GET" ? "/s/" + wsTag(env) + "/r/" + encodeURIComponent(route.slug) : "", svLang(request));
     const view = acardHost.trust({ ...env, ACARD_GUEST_TOKEN: undefined, ACARD_SESSION: "guest", ACARD_GUEST_EMAIL: session.email, ACARD_GUEST_SESSION: session.id, DB: viewDb(db, visible, roles, { session: session.id, email: session.email }) });
     const pass = () => next(request, view);
     switch (route.need) {
@@ -242,7 +278,7 @@
       case "home": {
         const roots = [...visible].filter(slug => !visible.has(model.parents.get(slug)));
         if (roots.length) return new Response(null, { status: 302, headers: { ...noStore, location: "/" + encodeURIComponent(roots[0]) + "/" } });
-        return page401("아직 공유받은 페이지가 없어요.");
+        return page401("아직 공유받은 페이지가 없어요.", {}, "", svLang(request));
       }
       case "media": return (await mediaReadable(db, route.slug, visible)) ? pass() : denied();
       case "any": return pass();
@@ -276,14 +312,17 @@
 
   // issue 114: the 6-digit code for an edit/comment link goes to the address the visitor typed (Resend, same sender domain as
   // beta invites). Without a mail key nothing is sent and the caller says so; the code never goes back in the response.
-  async function mailLinkCode(env, email, code) {
+  async function mailLinkCode(env, email, code, lang = "ko") {
     if (!env.RESEND_API_KEY) return false;
-    const text = "Acard 공유 페이지 확인 코드: " + code + "\n24시간 동안 쓸 수 있어요. 직접 요청하지 않았다면 이 메일은 무시해 주세요.";
+    const text = lang === "en" ? "Your Acard shared page verification code: " + code + "\nIt works for 24 hours. If you didn't ask for it, you can ignore this email."
+      : lang === "zh" ? "Acard 分享页面验证码：" + code + "\n24 小时内有效。如果不是你本人请求的，请忽略此邮件。"
+      : "Acard 공유 페이지 확인 코드: " + code + "\n24시간 동안 쓸 수 있어요. 직접 요청하지 않았다면 이 메일은 무시해 주세요.";
+    const subject = (lang === "en" ? "Acard verification code " : lang === "zh" ? "Acard 验证码 " : "Acard 확인 코드 ") + code;
     try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
-        body: JSON.stringify({ from: env.MAIL_FROM || "Acard <share@send.notes.example.com>", to: [email], subject: "Acard 확인 코드 " + code, text }),
+        body: JSON.stringify({ from: env.MAIL_FROM || "Acard <share@send.notes.example.com>", to: [email], subject, text }),
       });
       if (!res.ok) console.error("acard link code mail refused", res.status);
       return res.ok;
@@ -515,12 +554,13 @@
     return reply({ error: "없는 API예요." }, 404);
   }
 
-  function inviteForm(action, message, values = {}, intro = "초대받은 이메일과 받은 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요.") {
-    return shell("공유 초대", '<h1>공유된 페이지 열기</h1><p>' + escapeHtml(intro) + '</p>' +
-      (message ? '<p class="err" role="alert">' + escapeHtml(message) + "</p>" : "") +
-      '<form method="post" action="' + escapeHtml(action) + '"><label for="email">이메일</label><input id="email" name="email" type="email" autocomplete="email" required value="' + escapeHtml(values.email || "") + '">' +
-      '<label for="code">코드</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>' +
-      '<button type="submit">확인하고 열기</button></form>');
+  function inviteForm(action, message, values = {}, intro = "", lang = "ko") {
+    const T = ko => svT(lang, ko);
+    return shell(T("공유 초대"), '<h1>' + T("공유된 페이지 열기") + '</h1><p>' + escapeHtml(intro || T("초대받은 이메일과 받은 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요.")) + '</p>' +
+      (message ? '<p class="err" role="alert">' + escapeHtml(T(message)) + "</p>" : "") +
+      '<form method="post" action="' + escapeHtml(action) + '"><label for="email">' + T("이메일") + '</label><input id="email" name="email" type="email" autocomplete="email" required value="' + escapeHtml(values.email || "") + '">' +
+      '<label for="code">' + T("코드") + '</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>' +
+      '<button type="submit">' + T("확인하고 열기") + '</button></form>', lang);
   }
 
   function html(body, status = 200, extra = {}) {
@@ -529,23 +569,29 @@
 
   async function shareRoutes({ path, method, request, db, env }) {
     if (!path.startsWith("/s/")) return null;
-    if (!db) return html(shell("공유", "<h1>준비 중이에요</h1>"), 503);
+    // The request-access, email-code and invite forms read in the same language as the shared page (svLang).
+    const lang = svLang(request);
+    const T = ko => svT(lang, ko);
+    const page = (title, body) => shell(T(title), body, lang);
+    const notFound = () => html(page("공유", "<h1>" + T("없는 페이지예요") + "</h1>"), 404);
+    const inviteFormL = (action, message, values = {}, intro = "") => inviteForm(action, message, values, intro, lang);
+    if (!db) return html(page("공유", "<h1>" + T("준비 중이에요") + "</h1>"), 503);
     const invite = /^\/s\/i\/([A-Za-z0-9_-]{43})$/.exec(path);
     if (invite) {
       const action = "/s/" + wsTag(env) + "/i/" + invite[1];
-      if (method === "GET" || method === "HEAD") return html(inviteForm(action, ""));
+      if (method === "GET" || method === "HEAD") return html(inviteFormL(action, ""));
       if (method !== "POST") return new Response(null, { status: 405, headers: { ...noStore, allow: "GET, POST" } });
       const form = await request.formData().catch(() => null);
       const email = String(form?.get("email") || "").trim().toLowerCase();
       const code = String(form?.get("code") || "").trim();
       const ip = request.headers.get("cf-connecting-ip") || "local";
-      if (!(await hit(db, "verify:" + ip, 20, VERIFY_WINDOW_MS))) return html(inviteForm(action, "시도가 너무 많아요. 15분 뒤에 다시 해 주세요.", { email }), 429);
+      if (!(await hit(db, "verify:" + ip, 20, VERIFY_WINDOW_MS))) return html(inviteFormL(action, "시도가 너무 많아요. 15분 뒤에 다시 해 주세요.", { email }), 429);
       const idHash = await sha(invite[1]);
       const row = await db.prepare("SELECT i.id_hash, i.rule, i.email, i.code_hash, i.expires, i.tries, i.used, r.page, r.principal, r.role, r.expires AS rule_expires FROM share_invites i JOIN share_rules r ON r.id = i.rule AND r.revoked IS NULL WHERE i.id_hash = ?").bind(idHash).first();
       const viaLink = row && row.principal === "link";
-      if (!row || row.used !== null || Number(row.expires) <= Date.now() || Number(row.tries) >= MAX_TRIES || (viaLink && (row.role === "read" || (row.rule_expires !== null && Number(row.rule_expires) <= Date.now())))) return html(inviteForm(action, "코드가 끝났거나 맞지 않아요. 공유한 사람에게 새 코드를 받아 주세요.", { email }), 401);
+      if (!row || row.used !== null || Number(row.expires) <= Date.now() || Number(row.tries) >= MAX_TRIES || (viaLink && (row.role === "read" || (row.rule_expires !== null && Number(row.rule_expires) <= Date.now())))) return html(inviteFormL(action, "코드가 끝났거나 맞지 않아요. 공유한 사람에게 새 코드를 받아 주세요.", { email }), 401);
       await db.prepare("UPDATE share_invites SET tries = tries + 1 WHERE id_hash = ?").bind(idHash).run();
-      if (email !== String(row.email) || !constantTimeEqual(await sha(invite[1] + ":" + code), String(row.code_hash))) return html(inviteForm(action, "이메일이나 코드가 맞지 않아요.", { email }), 401);
+      if (email !== String(row.email) || !constantTimeEqual(await sha(invite[1] + ":" + code), String(row.code_hash))) return html(inviteFormL(action, "이메일이나 코드가 맞지 않아요.", { email }), 401);
       const token = randomToken();
       const now = Date.now();
       await db.batch([
@@ -561,13 +607,13 @@
       // issue 114: anyone with an edit/comment link proves an email here (a mailed 6-digit code, no account) and then edits
       // as a guest of that link. A read link, or a turned-off or expired one, has no such step.
       const rule = await db.prepare("SELECT id, page, role, expires FROM share_rules WHERE token_hash = ? AND principal = 'link' AND revoked IS NULL").bind(await sha(linkAsk[1])).first();
-      if (!rule || rule.role === "read" || (rule.expires !== null && Number(rule.expires) <= Date.now())) return html(shell("공유", "<h1>없거나 끝난 링크예요</h1>"), 404);
+      if (!rule || rule.role === "read" || (rule.expires !== null && Number(rule.expires) <= Date.now())) return html(page("공유", "<h1>" + T("없거나 끝난 링크예요") + "</h1>"), 404);
       const action = "/s/" + wsTag(env) + "/l/" + linkAsk[1];
-      const verb = rule.role === "comment" ? "댓글을 달려면" : "편집하려면";
-      const form = (message = "", email = "") => shell("이메일 확인", "<h1>" + verb + " 이메일을 확인해 주세요</h1><p>이메일로 6자리 코드를 보내 드려요. 회원가입은 필요 없어요.</p>" +
-        (message ? '<p class="err" role="alert">' + escapeHtml(message) + "</p>" : "") +
-        '<form method="post" action="' + escapeHtml(action) + '"><label for="email">이메일</label><input id="email" name="email" type="email" autocomplete="email" required value="' + escapeHtml(email) + '">' +
-        '<button type="submit">코드 받기</button></form>');
+      const heading = rule.role === "comment" ? "댓글을 달려면 이메일을 확인해 주세요" : "편집하려면 이메일을 확인해 주세요";
+      const form = (message = "", email = "") => page("이메일 확인", "<h1>" + T(heading) + "</h1><p>" + T("이메일로 6자리 코드를 보내 드려요. 회원가입은 필요 없어요.") + "</p>" +
+        (message ? '<p class="err" role="alert">' + escapeHtml(T(message)) + "</p>" : "") +
+        '<form method="post" action="' + escapeHtml(action) + '"><label for="email">' + T("이메일") + '</label><input id="email" name="email" type="email" autocomplete="email" required value="' + escapeHtml(email) + '">' +
+        '<button type="submit">' + T("코드 받기") + '</button></form>');
       if (method === "GET" || method === "HEAD") return html(form());
       if (method !== "POST") return new Response(null, { status: 405, headers: { ...noStore, allow: "GET, POST" } });
       const data = await request.formData().catch(() => null);
@@ -576,24 +622,25 @@
       const ip = request.headers.get("cf-connecting-ip") || "local";
       if (!(await hit(db, "linkcode:" + ip, 10, 60 * 60 * 1000)) || !(await hit(db, "linkcode-to:" + email, 3, 60 * 60 * 1000))) return html(form("요청이 너무 많아요. 잠시 뒤에 다시 해 주세요.", email), 429);
       const invite = await createInvite(db, env, String(rule.id), email, true);
-      const sent = await mailLinkCode(env, email, invite.code);
+      const sent = await mailLinkCode(env, email, invite.code, lang);
       if (!sent) {
         await db.prepare("UPDATE share_invites SET used = ? WHERE rule = ? AND email = ? AND used IS NULL").bind(Date.now(), String(rule.id), email).run();
         return html(form("코드 메일을 보내지 못했어요. 잠시 뒤에 다시 해 주세요.", email), 503);
       }
-      return html(inviteForm(invite.url, "", { email }, email + " 로 보낸 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요."));
+      const sentTo = lang === "en" ? "Enter the 6-digit code sent to " + email + ". The code works for 24 hours." : lang === "zh" ? "请输入发送到 " + email + " 的 6 位验证码。验证码 24 小时内有效。" : email + " 로 보낸 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요.";
+      return html(inviteFormL(invite.url, "", { email }, sentTo));
     }
     const ask = /^\/s\/r\/([^/]+)$/.exec(path);
     if (ask) {
       let slug;
-      try { slug = resolveSlug(decodeURIComponent(ask[1])); } catch { return html(shell("공유", "<h1>없는 페이지예요</h1>"), 404); }
+      try { slug = resolveSlug(decodeURIComponent(ask[1])); } catch { return notFound(); }
       const action = "/s/" + wsTag(env) + "/r/" + encodeURIComponent(slug);
       const wantEdit = new URL(request.url).searchParams.get("role") === "edit";
-      const form = (message = "", edit = wantEdit) => shell("권한 요청", "<h1>이 페이지 권한 요청</h1><p>공유한 사람에게 요청을 보내요. 승인되면 이 이메일로 열 수 있는 초대 링크와 코드를 받아요.</p>" +
-        (message ? '<p class="err" role="alert">' + escapeHtml(message) + "</p>" : "") +
-        '<form method="post" action="' + escapeHtml(action) + '"><label for="email">내 이메일</label><input id="email" name="email" type="email" autocomplete="email" required>' +
-        '<label for="role">원하는 권한</label><select id="role" name="role"><option value="read">읽기 허용</option><option value="edit"' + (edit ? " selected" : "") + '>편집 허용</option></select>' +
-        '<label for="note">한마디 (선택)</label><textarea id="note" name="note" rows="3" maxlength="300"></textarea><button type="submit">요청 보내기</button></form>');
+      const form = (message = "", edit = wantEdit) => page("권한 요청", "<h1>" + T("이 페이지 권한 요청") + "</h1><p>" + T("공유한 사람에게 요청을 보내요. 승인되면 이 이메일로 열 수 있는 초대 링크와 코드를 받아요.") + "</p>" +
+        (message ? '<p class="err" role="alert">' + escapeHtml(T(message)) + "</p>" : "") +
+        '<form method="post" action="' + escapeHtml(action) + '"><label for="email">' + T("내 이메일") + '</label><input id="email" name="email" type="email" autocomplete="email" required>' +
+        '<label for="role">' + T("원하는 권한") + '</label><select id="role" name="role"><option value="read">' + T("읽기 허용") + '</option><option value="edit"' + (edit ? " selected" : "") + '>' + T("편집 허용") + '</option></select>' +
+        '<label for="note">' + T("한마디 (선택)") + '</label><textarea id="note" name="note" rows="3" maxlength="300"></textarea><button type="submit">' + T("요청 보내기") + '</button></form>');
       if (method === "GET" || method === "HEAD") return html(form());
       if (method !== "POST") return new Response(null, { status: 405, headers: { ...noStore, allow: "GET, POST" } });
       const data = await request.formData().catch(() => null);
@@ -606,19 +653,20 @@
       const open = live && await db.prepare("SELECT id FROM share_requests WHERE page = ? AND email = ? AND status = 'open'").bind(slug, email).first();
       if (live && !open) await db.prepare("INSERT INTO share_requests (id, page, email, role, note, created) VALUES (?, ?, ?, ?, ?, ?)").bind(randomId(), slug, email, data.get("role") === "edit" ? "edit" : "read", String(data.get("note") || "").slice(0, 300), Date.now()).run();
       // Same answer whether or not the page exists, so the form never confirms a private slug.
-      return html(shell("권한 요청", "<h1>요청을 보냈어요</h1><p>공유한 사람이 승인하면 초대 링크와 코드를 받을 수 있어요.</p>"));
+      return html(page("권한 요청", "<h1>" + T("요청을 보냈어요") + "</h1><p>" + T("공유한 사람이 승인하면 초대 링크와 코드를 받을 수 있어요.") + "</p>"));
     }
     if (path === "/s/logout" && method === "POST") {
       return new Response(null, { status: 303, headers: { ...noStore, "clear-site-data": '"cache"', location: "/", "set-cookie": clearCookie } });
     }
-    return html(shell("공유", "<h1>없는 페이지예요</h1>"), 404);
+    return notFound();
   }
 
   const PUBLIC_HEADERS = { "cache-control": "private, no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" };
   // The only script a shared page runs (allowed by its hash): size each sandboxed HTML-block frame to the height it reports.
-  const SV_FRAME_RESIZE = 'addEventListener("message",function(e){var h=e.data&&+e.data.acvH;if(!(h>0))return;document.querySelectorAll("iframe.acv-frame").forEach(function(f){if(f.contentWindow===e.source)f.style.height=Math.min(20000,h)+"px"})})';
+  // Built on first use: VISUAL_PLACE_HEADS (visual-html.js) is defined beside this file only in the assembled worker.
+  const svFrameResize = () => 'addEventListener("message",function(e){var h=e.data&&+e.data.acvH;if(!(h>0))return;document.querySelectorAll("iframe.acv-frame").forEach(function(f){if(f.contentWindow===e.source){f.style.height=Math.min(20000,h)+"px";' + VISUAL_PLACE_HEADS + '}})})';
   let svFrameResizeHashValue = null;
-  const svFrameResizeHash = async () => svFrameResizeHashValue || (svFrameResizeHashValue = "sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SV_FRAME_RESIZE))))));
+  const svFrameResizeHash = async () => svFrameResizeHashValue || (svFrameResizeHashValue = "sha256-" + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(svFrameResize()))))));
   const SV_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
   const SV_MOON = SV_ICON + '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>';
   const SV_CLOCK = SV_ICON + '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
@@ -627,17 +675,93 @@
   // issue 116: a shared page follows the viewer's system theme unless the owner fixed it (share_pages.theme light | dark).
   // The fixed theme is html[data-theme], which tokens.css already reads; the 테마 바꾸기 toggle still flips it.
   const SHARE_THEMES = ["system", "light", "dark"];
+  // A shared page's own words (date, access pill, buttons, contents) follow the reader's language: the acard_lang choice,
+  // else a Korean browser reads Korean, else English (gate/i18n.ts pickUserLang). The page CSP runs no translator script,
+  // so the copy is picked here; the Korean wording is the key, as in assets/i18n/app-{en,zh}.json.
+  const SV_TEXT = {
+    en: {
+      "공유 링크 · 편집 허용": "Share link · Can edit", "공유 링크 · 댓글 허용": "Share link · Can comment", "공유 링크 · 읽기 전용": "Share link · Read-only",
+      "공개 페이지 · 읽기 전용": "Public page · Read-only", "편집 권한 요청": "Request edit access",
+      "공유한 사람이 승인하면 이메일로 초대 링크와 코드를 받아요.": "When the owner approves, you get an invite link and code by email.",
+      "편집하려면 이메일로 확인": "Confirm by email to edit", "댓글을 달려면 이메일로 확인": "Confirm by email to comment",
+      "회원가입 없이 이메일로 받은 6자리 코드로 확인해요.": "No sign-up: you confirm with a 6-digit code sent to your email.",
+      "목차": "Contents", "하위 페이지": "Subpages", "위치": "Location", "Acard로 만들었어요": "Made with Acard", "테마 바꾸기": "Change theme",
+      // The request-access, email-code and invite forms (/s/r, /s/l, /s/i), their errors, and the page's notices.
+      "공유": "Sharing", "없는 페이지예요": "Page not found", "준비 중이에요": "Not ready yet", "없거나 끝난 링크예요": "This link doesn't exist or has ended",
+      "권한 요청": "Request access", "이 페이지 권한 요청": "Request access to this page",
+      "공유한 사람에게 요청을 보내요. 승인되면 이 이메일로 열 수 있는 초대 링크와 코드를 받아요.": "We'll send your request to the owner. If they approve, this email gets an invite link and code to open the page.",
+      "내 이메일": "Your email", "원하는 권한": "Access you want", "읽기 허용": "Can read", "편집 허용": "Can edit", "한마디 (선택)": "Note (optional)", "요청 보내기": "Send request",
+      "요청을 보냈어요": "Request sent", "공유한 사람이 승인하면 초대 링크와 코드를 받을 수 있어요.": "When the owner approves, you'll get an invite link and code.",
+      "이메일 확인": "Confirm your email", "편집하려면 이메일을 확인해 주세요": "Confirm your email to edit", "댓글을 달려면 이메일을 확인해 주세요": "Confirm your email to comment",
+      "이메일로 6자리 코드를 보내 드려요. 회원가입은 필요 없어요.": "We'll email you a 6-digit code. No sign-up needed.", "이메일": "Email", "코드 받기": "Get code",
+      "공유 초대": "Shared page invite", "공유된 페이지 열기": "Open the shared page", "코드": "Code", "확인하고 열기": "Confirm and open",
+      "초대받은 이메일과 받은 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요.": "Enter the email you were invited with and the 6-digit code you got. The code works for 24 hours.",
+      "이메일 주소를 확인해 주세요.": "Please check the email address.", "요청이 너무 많아요. 잠시 뒤에 다시 해 주세요.": "Too many requests. Please try again in a moment.",
+      "코드 메일을 보내지 못했어요. 잠시 뒤에 다시 해 주세요.": "We couldn't send the code email. Please try again in a moment.",
+      "시도가 너무 많아요. 15분 뒤에 다시 해 주세요.": "Too many tries. Please try again in 15 minutes.",
+      "코드가 끝났거나 맞지 않아요. 공유한 사람에게 새 코드를 받아 주세요.": "This code has ended or doesn't match. Please get a new code from the owner.",
+      "이메일이나 코드가 맞지 않아요.": "The email or code doesn't match.",
+      "권한이 없어요": "No access", "권한 요청하기": "Request access", "공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요.": "Your sharing session has ended. Please open the invite link again.",
+      "이 페이지를 볼 권한이 없어요. 공유한 사람에게 권한을 요청해 주세요.": "You don't have access to this page. Please ask the owner for access.", "아직 공유받은 페이지가 없어요.": "No pages have been shared with you yet.",
+      "주소가 바뀌었거나, 공유한 사람이 이 페이지를 더 이상 공개하지 않아요.": "The address changed, or the owner no longer shares this page.",
+      "볼 수 있는 권한이 없어요": "You can't view this page", "이 공유 링크는 꺼졌거나 만료됐어요. 공유한 사람에게 새 링크를 받아 주세요.": "This share link was turned off or has expired. Please get a new link from the owner.",
+      "Acard 둘러보기": "Explore Acard", "이 파일 주소는 만료됐어요. 공유 페이지를 다시 열어 주세요.": "This file address has expired. Please open the shared page again.",
+    },
+    zh: {
+      "공유 링크 · 편집 허용": "共享链接 · 可编辑", "공유 링크 · 댓글 허용": "共享链接 · 可评论", "공유 링크 · 읽기 전용": "共享链接 · 只读",
+      "공개 페이지 · 읽기 전용": "公开页面 · 只读", "편집 권한 요청": "请求编辑权限",
+      "공유한 사람이 승인하면 이메일로 초대 링크와 코드를 받아요.": "分享者批准后，你会通过邮件收到邀请链接和验证码。",
+      "편집하려면 이메일로 확인": "通过邮箱确认后编辑", "댓글을 달려면 이메일로 확인": "通过邮箱确认后评论",
+      "회원가입 없이 이메일로 받은 6자리 코드로 확인해요.": "无需注册：用发到邮箱的 6 位验证码确认。",
+      "목차": "目录", "하위 페이지": "子页面", "위치": "位置", "Acard로 만들었어요": "用 Acard 制作", "테마 바꾸기": "切换主题",
+      "공유": "共享", "없는 페이지예요": "页面不存在", "준비 중이에요": "尚未准备好", "없거나 끝난 링크예요": "链接不存在或已结束",
+      "권한 요청": "请求权限", "이 페이지 권한 요청": "请求此页面的权限",
+      "공유한 사람에게 요청을 보내요. 승인되면 이 이메일로 열 수 있는 초대 링크와 코드를 받아요.": "请求会发送给分享者。批准后，这个邮箱会收到可以打开页面的邀请链接和验证码。",
+      "내 이메일": "我的邮箱", "원하는 권한": "想要的权限", "읽기 허용": "可阅读", "편집 허용": "可编辑", "한마디 (선택)": "留言（可选）", "요청 보내기": "发送请求",
+      "요청을 보냈어요": "请求已发送", "공유한 사람이 승인하면 초대 링크와 코드를 받을 수 있어요.": "分享者批准后，你会收到邀请链接和验证码。",
+      "이메일 확인": "确认邮箱", "편집하려면 이메일을 확인해 주세요": "确认邮箱后即可编辑", "댓글을 달려면 이메일을 확인해 주세요": "确认邮箱后即可评论",
+      "이메일로 6자리 코드를 보내 드려요. 회원가입은 필요 없어요.": "我们会向你的邮箱发送 6 位验证码，无需注册。", "이메일": "邮箱", "코드 받기": "获取验证码",
+      "공유 초대": "共享邀请", "공유된 페이지 열기": "打开共享的页面", "코드": "验证码", "확인하고 열기": "确认并打开",
+      "초대받은 이메일과 받은 6자리 코드를 넣어 주세요. 코드는 24시간 동안 쓸 수 있어요.": "请输入受邀邮箱和收到的 6 位验证码。验证码 24 小时内有效。",
+      "이메일 주소를 확인해 주세요.": "请检查邮箱地址。", "요청이 너무 많아요. 잠시 뒤에 다시 해 주세요.": "请求太多，请稍后再试。",
+      "코드 메일을 보내지 못했어요. 잠시 뒤에 다시 해 주세요.": "验证码邮件发送失败，请稍后再试。",
+      "시도가 너무 많아요. 15분 뒤에 다시 해 주세요.": "尝试次数太多，请 15 分钟后再试。",
+      "코드가 끝났거나 맞지 않아요. 공유한 사람에게 새 코드를 받아 주세요.": "验证码已失效或不正确，请向分享者索取新验证码。",
+      "이메일이나 코드가 맞지 않아요.": "邮箱或验证码不正确。",
+      "권한이 없어요": "没有权限", "권한 요청하기": "请求权限", "공유 세션이 끝났어요. 초대 링크를 다시 열어 주세요.": "共享会话已结束，请重新打开邀请链接。",
+      "이 페이지를 볼 권한이 없어요. 공유한 사람에게 권한을 요청해 주세요.": "你没有查看此页面的权限，请向分享者请求权限。", "아직 공유받은 페이지가 없어요.": "还没有人与你共享页面。",
+      "주소가 바뀌었거나, 공유한 사람이 이 페이지를 더 이상 공개하지 않아요.": "地址已更改，或分享者不再公开此页面。",
+      "볼 수 있는 권한이 없어요": "无权查看", "이 공유 링크는 꺼졌거나 만료됐어요. 공유한 사람에게 새 링크를 받아 주세요.": "此共享链接已关闭或过期，请向分享者索取新链接。",
+      "Acard 둘러보기": "了解 Acard", "이 파일 주소는 만료됐어요. 공유 페이지를 다시 열어 주세요.": "此文件地址已过期，请重新打开共享页面。",
+    },
+  };
+  const SV_LANG = { ko: { html: "ko", og: "ko_KR", date: "ko-KR" }, en: { html: "en", og: "en_US", date: "en-US" }, zh: { html: "zh-CN", og: "zh_CN", date: "zh-CN" } };
+  const svLang = request => {
+    const chosen = /(?:^|;\s*)acard_lang=(ko|en|zh)(?:;|$)/.exec(request.headers.get("cookie") || "");
+    if (chosen) return chosen[1];
+    const first = String(request.headers.get("accept-language") || "").split(",")[0].trim().toLowerCase();
+    return first === "ko" || first.startsWith("ko-") ? "ko" : "en";
+  };
+  const svT = (lang, ko) => (SV_TEXT[lang] && SV_TEXT[lang][ko]) || ko;
+  // "Edited <date>" reads in the reader's language; the date stays on Seoul time like before.
+  const svEdited = (lang, ms) => {
+    const day = new Date(Number(ms)).toLocaleDateString(SV_LANG[lang].date, { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Seoul" });
+    return lang === "en" ? "Edited " + day : lang === "zh" ? day + " 修改" : day + "에 수정됨";
+  };
+  const svSharedOn = (lang, name) => (lang === "en" ? "A page shared on " + name + "." : lang === "zh" ? "在 " + name + " 上分享的页面。" : name + "에서 공유한 페이지예요.");
+  // The bar's "made with" words sit around the wordmark: before it in English and Chinese, after it in Korean.
+  const SV_MADE = { ko: ["", "로 만들었어요"], en: ["Made with", ""], zh: ["用", "制作"] };
   const shareTheme = value => (value === "light" || value === "dark" ? value : "system");
-  const svPage = (title, inner, extraHead = "", theme = "system") => '<!doctype html><html lang="ko"' + (theme === "system" ? "" : ' data-theme="' + theme + '"') + '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="' + (theme === "system" ? "light dark" : theme) + '"><title>' + title + '</title>' + extraHead + '</head><body class="sv">' +
-    '<input type="checkbox" id="sv-tt" class="sv-tt" aria-label="테마 바꾸기">' + inner + "</body></html>";
+  const svPage = (title, inner, extraHead = "", theme = "system", lang = "ko") => '<!doctype html><html lang="' + SV_LANG[lang].html + '"' + (theme === "system" ? "" : ' data-theme="' + theme + '"') + '><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="' + (theme === "system" ? "light dark" : theme) + '"><title>' + title + '</title>' + extraHead + '</head><body class="sv">' +
+    '<input type="checkbox" id="sv-tt" class="sv-tt" aria-label="' + svT(lang, "테마 바꾸기") + '">' + inner + "</body></html>";
   const SV_NOTICE_VARS = ":root{--bg:#fff;--bg-soft:#f6f6f8;--fg:#26252c;--fg-dim:#5f5d69;--line:#ececf0;--accent:#6450dc;--on-accent:#fff;--font-body:'Pretendard Variable',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;--fs-12:12px;--fs-13:13px;--fs-14:14px;--fs-16:16px;--fs-28:28px}" +
     "@media (prefers-color-scheme:dark){:root{--bg:#1b1b20;--bg-soft:#26262d;--fg:#ecebf2;--fg-dim:#a3a1ad;--line:#31313a;--accent:#a597ff;--on-accent:#16131f}}";
-  const svNotice = (status, heading, text) => '<style>' + SV_NOTICE_VARS + SV_BASE_CSS + '</style>' +
-    '<header class="sv-bar"><a class="sv-crumb" href="/"><img src="/logo.svg" alt="" width="22" height="22"><b>Acard</b></a><span class="sv-grow"></span><label for="sv-tt" class="sv-theme" title="테마 바꾸기">' + SV_MOON + '</label></header>' +
-    '<main class="sv-notice"><p class="sv-code">' + status + '</p><h1>' + heading + '</h1><p>' + text + '</p><a class="sv-btn" href="/">Acard 둘러보기</a></main>';
-  const noticeResponse = (method, status, heading, text) => new Response(method === "HEAD" ? null : svPage(heading + " · Acard", svNotice(status, heading, text), '<meta name="robots" content="noindex, nofollow">'), { status, headers: { ...PUBLIC_HEADERS, "x-robots-tag": "noindex, nofollow", "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
-  const missing = method => noticeResponse(method, 404, "없는 페이지예요", "주소가 바뀌었거나, 공유한 사람이 이 페이지를 더 이상 공개하지 않아요.");
-  const closed = method => noticeResponse(method, 401, "볼 수 있는 권한이 없어요", "이 공유 링크는 꺼졌거나 만료됐어요. 공유한 사람에게 새 링크를 받아 주세요.");
+  const svNotice = (status, heading, text, lang = "ko") => '<style>' + SV_NOTICE_VARS + SV_BASE_CSS + '</style>' +
+    '<header class="sv-bar"><a class="sv-crumb" href="/"><img src="/logo.svg" alt="" width="22" height="22"><b>Acard</b></a><span class="sv-grow"></span><label for="sv-tt" class="sv-theme" title="' + svT(lang, "테마 바꾸기") + '">' + SV_MOON + '</label></header>' +
+    '<main class="sv-notice"><p class="sv-code">' + status + '</p><h1>' + svT(lang, heading) + '</h1><p>' + svT(lang, text) + '</p><a class="sv-btn" href="/">' + svT(lang, "Acard 둘러보기") + '</a></main>';
+  const noticeResponse = (method, status, heading, text, lang = "ko") => new Response(method === "HEAD" ? null : svPage(svT(lang, heading) + " · Acard", svNotice(status, heading, text, lang), '<meta name="robots" content="noindex, nofollow">', "system", lang), { status, headers: { ...PUBLIC_HEADERS, "content-language": SV_LANG[lang].html, vary: "Cookie, Accept-Language", "x-robots-tag": "noindex, nofollow", "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
+  const missing = (method, request) => noticeResponse(method, 404, "없는 페이지예요", "주소가 바뀌었거나, 공유한 사람이 이 페이지를 더 이상 공개하지 않아요.", svLang(request));
+  const closed = (method, request) => noticeResponse(method, 401, "볼 수 있는 권한이 없어요", "이 공유 링크는 꺼졌거나 만료됐어요. 공유한 사람에게 새 링크를 받아 주세요.", svLang(request));
 
   function referencedMedia(blocks) {
     const ids = new Set();
@@ -645,6 +769,8 @@
       const value = block.type === "image" ? block.meta?.src : ["video", "audio", "file"].includes(block.type) ? block.meta?.url : null;
       const match = typeof value === "string" && /^\/media\/([0-9a-f]{16})$/.exec(value);
       if (match) ids.add(match[1]);
+      const poster = block.type === "video" && typeof block.meta?.poster === "string" && /^\/media\/([0-9a-f]{16})$/.exec(block.meta.poster);
+      if (poster) ids.add(poster[1]);
     }
     return ids;
   }
@@ -660,16 +786,16 @@
 
   // Attributes for one shared image: WebP srcset on the <img> (AVIF goes in a <source> before it), the size so the box is
   // reserved before the bytes arrive, lazy below the first image, and on the first one a tiny blurred placeholder.
-  function variantMarkup(base, id, info, sizes, first) {
+  function variantMarkup(base, id, info, sizes, first, signed = "") {
     const original = base + "/media/" + id;
-    const attrs = { src: original, decoding: "async", loading: first ? "eager" : "lazy" };
+    const attrs = { src: original + signed, decoding: "async", loading: first ? "eager" : "lazy" };
     if (first) attrs.fetchpriority = "high";
     if (!info || info.skip || !info.w || !info.h) return { attrs, avif: "" };
     const steps = VARIANT_WIDTHS.filter(w => w < info.w).map(w => [w, w]);
     const above = VARIANT_WIDTHS.find(w => w >= info.w);
     if (above) steps.push([above, info.w]);
-    const set = type => steps.map(([w, real]) => original + "/" + w + "." + type + " " + real + "w").join(", ");
-    attrs.src = original + "/" + steps[Math.min(1, steps.length - 1)][0] + ".webp";
+    const set = type => steps.map(([w, real]) => original + "/" + w + "." + type + signed + " " + real + "w").join(", ");
+    attrs.src = original + "/" + steps[Math.min(1, steps.length - 1)][0] + ".webp" + signed;
     attrs.srcset = set("webp");
     attrs.sizes = sizes;
     attrs.width = String(info.w);
@@ -727,7 +853,8 @@
 
   function shareCacheKey(env, request, path, seq) {
     const build = (globalThis.ACARD_BUILD && globalThis.ACARD_BUILD.sha) || "dev";
-    return new Request("https://acard-share.internal/" + new URL(request.url).host + "/" + (env.ACARD_WORKSPACE || "owner") + path + "?v=" + seq + "&b=" + encodeURIComponent(build));
+    // The page's own words follow the reader's language, so each language is its own cached copy.
+    return new Request("https://acard-share.internal/" + new URL(request.url).host + "/" + (env.ACARD_WORKSPACE || "owner") + path + "?v=" + seq + "&b=" + encodeURIComponent(build) + "&l=" + svLang(request));
   }
 
   async function publicPage(ctx) {
@@ -762,11 +889,11 @@
   // A published page the owner allowed search engines to index lists itself (and, with sub-pages published, every
   // readable descendant) in <prefix><token>/sitemap.xml. Link shares, legacy links, revoked, expired or not-indexed rules 404.
   async function publishSitemap(db, env, request, token, method) {
-    if (!db) return missing(method);
+    if (!db) return missing(method, request);
     const rule = await db.prepare("SELECT id, page, principal, role, expires, revoked FROM share_rules WHERE token_hash = ? AND principal = 'publish'").bind(await sha(token)).first();
-    if (!rule || rule.revoked !== null || (rule.expires !== null && Number(rule.expires) <= Date.now()) || String(rule.id).startsWith("pl-")) return missing(method);
+    if (!rule || rule.revoked !== null || (rule.expires !== null && Number(rule.expires) <= Date.now()) || String(rule.id).startsWith("pl-")) return missing(method, request);
     const settings = await db.prepare("SELECT allow_index FROM share_pages WHERE page = ?").bind(String(rule.page)).first();
-    if (Number(settings?.allow_index) !== 1) return missing(method);
+    if (Number(settings?.allow_index) !== 1) return missing(method, request);
     const model = await loadModel(db);
     const tokenRule = { ...rule, expires: rule.expires === null ? null : Number(rule.expires) };
     const pages = await db.prepare("SELECT slug, updated FROM pages p WHERE kind != 'db_row' AND NOT EXISTS (SELECT 1 FROM editor_trash t WHERE t.page = p.slug)").all();
@@ -785,19 +912,19 @@
     const sitemapMatch = /^\/p\/([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048])\/sitemap\.xml$/.exec(path);
     if (sitemapMatch) return publishSitemap(db, env, request, sitemapMatch[1], method);
     // A canonical unpadded base64url encoding of 32 bytes has 43 characters.
-    const match = /^\/p\/([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048])(?:\/media\/([0-9a-f]{16})(?:\/(480|960|1440)\.(avif|webp))?|(?:\/(?!frame\/[^/])([^/]+))?(?:\/frame\/([^/]{1,120}))?\/?)$/.exec(path);
-    if (!match || !db) return missing(method);
+    const match = /^\/p\/([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048])(?:\/media\/([0-9a-f]{16})(?:\/(480|960|1440)\.(avif|webp))?|(?:\/(?!frame\/[^/])([^/]+))?(?:\/frame\/([^/]{1,1600}))?\/?)$/.exec(path);
+    if (!match || !db) return missing(method, request);
     // Groups 3-4 are the variant width/type; the rest of the function reads the sub-page as [3] and the frame as [4].
     const [variantWidth, variantType] = match.splice(3, 2);
     const rule = await db.prepare("SELECT id, page, principal, role, expires, revoked FROM share_rules WHERE token_hash = ? AND principal IN ('link', 'publish')").bind(await sha(match[1])).first();
-    if (!rule) return missing(method);
+    if (!rule) return missing(method, request);
     const now = Date.now();
-    if (rule.revoked !== null || (rule.expires !== null && Number(rule.expires) <= now)) return rule.principal === "link" ? closed(method) : missing(method);
+    if (rule.revoked !== null || (rule.expires !== null && Number(rule.expires) <= now)) return rule.principal === "link" ? closed(method, request) : missing(method, request);
     const model = await loadModel(db);
     const token = { ...rule, expires: rule.expires === null ? null : Number(rule.expires) };
     let slug = String(rule.page);
-    if (match[3]) { try { slug = resolveSlug(decodeURIComponent(match[3])); } catch { return missing(method); } }
-    if (shareRole(model, slug, { kind: "token", rule: token }) === "none") return missing(method);
+    if (match[3]) { try { slug = resolveSlug(decodeURIComponent(match[3])); } catch { return missing(method, request); } }
+    if (shareRole(model, slug, { kind: "token", rule: token }) === "none") return missing(method, request);
     const guestCookie = /(?:^|;\s*)acard_guest=(o|[0-9a-f]{32})\.([A-Za-z0-9_-]{43})/.exec(request.headers.get("cookie") || "");
     if (rule.principal === "link" && rule.role !== "read" && guestCookie && guestCookie[1] === wsTag(env) && !match[2] && !match[4]) {
       const session = await readSession(db, guestCookie[2]);
@@ -808,15 +935,17 @@
       }
     }
     const found = await readPage(db, slug);
-    if (!found) return missing(method);
+    if (!found) return missing(method, request);
+    const visible = new Set([...model.parents.keys()].filter(page => shareRole(model, page, { kind: "token", rule: token }) !== "none"));
+    const expanded = materializeSyncedBlocks(found.blocks, await resolveSyncedBlocks(db, slug, found.blocks, { principal: { kind: "token" }, visible }));
     const base = sharePrefix(env) + match[1];
     // HTML/visual blocks load from their own URL: a srcdoc frame would inherit this page's script-free CSP.
     if (match[4]) {
       let blockId;
-      try { blockId = decodeURIComponent(match[4]); } catch { return missing(method); }
-      const block = found.blocks.find(item => (item.type === "html" || item.type === "visual" || item.type === "part") && String(item.id) === blockId);
+      try { blockId = decodeURIComponent(match[4]); } catch { return missing(method, request); }
+      const block = expanded.find(item => (item.type === "html" || item.type === "visual" || item.type === "part") && String(item.id) === blockId);
       const source = block ? String(block.text || "") : "";
-      if (!block || new TextEncoder().encode(source).length > VISUAL_MAX_BYTES) return missing(method);
+      if (!block || new TextEncoder().encode(source).length > VISUAL_MAX_BYTES) return missing(method, request);
       const frameHeaders = { ...PUBLIC_HEADERS, "x-robots-tag": "noindex, nofollow", "content-type": "text/html; charset=utf-8", "content-security-policy": VISUAL_CSP + "; sandbox allow-scripts; frame-ancestors 'self'; base-uri 'none'; form-action 'none'" };
       if (block.type !== "part") return new Response(method === "HEAD" ? null : visualSrcdoc(source), { headers: frameHeaders });
       // #38: a shared page runs no page script, so the part's code goes into its frame document (same sandbox and CSP).
@@ -828,27 +957,33 @@
       const themeCss = builtinTheme ? partThemeCss(builtinTheme) : themeRow ? partThemeCss({ light: themeRow.light ? JSON.parse(themeRow.light) : undefined, dark: themeRow.dark ? JSON.parse(themeRow.dark) : undefined }) : "";
       return new Response(method === "HEAD" ? null : partSrcdoc(partId, source, registered ? { html: String(registered.code) } : { code: PART_RUNTIME }, themeId, themeCss), { headers: frameHeaders });
     }
-    const ids = referencedMedia(found.blocks);
+    const ids = referencedMedia(expanded);
     const coverMedia = /^\/media\/([0-9a-f]{16})$/.exec(String(found.settings?.cover || "").trim());
     if (coverMedia) ids.add(coverMedia[1]);
     const iconMedia = /^\/media\/([0-9a-f]{16})$/.exec(String(found.settings?.icon || "").trim());
     if (iconMedia) ids.add(iconMedia[1]);
-    const shareIcon = html => iconMedia ? html.replace('src="/media/' + iconMedia[1] + '"', () => 'src="' + base + "/media/" + iconMedia[1] + '"') : html;
+    const signed = new Map(match[2] ? [] : await Promise.all([...ids].map(async id => [id, await mediaQuery(env, match[1], id)])));
+    const shareIcon = html => iconMedia ? html.replace('src="/media/' + iconMedia[1] + '"', () => 'src="' + base + "/media/" + iconMedia[1] + signed.get(iconMedia[1]) + '"') : html;
     const settings = await db.prepare("SELECT allow_index, site_title, theme FROM share_pages WHERE page = ?").bind(String(rule.page)).first();
     const theme = shareTheme(settings?.theme);
     const indexable = rule.principal === "publish" && Number(settings?.allow_index) === 1 && !String(rule.id).startsWith("pl-");
     const robots = indexable ? "index, follow" : "noindex, nofollow";
     if (match[2]) {
-      if (!ids.has(match[2])) return missing(method);
-      const media = variantWidth ? await serveVariant(env, match[2], Number(variantWidth), variantType) : await serveMedia(env, match[2]);
-      if (!media.ok) return missing(method);
+      if (!ids.has(match[2])) return missing(method, request);
+      const sigState = await mediaSigState(env, match[1], match[2], new URL(request.url).searchParams.get("k"));
+      if (sigState === "missing") return new Response(null, { status: 302, headers: { ...PUBLIC_HEADERS, "x-robots-tag": "noindex, nofollow", location: base + "/media/" + match[2] + (variantWidth ? "/" + variantWidth + "." + variantType : "") + await mediaQuery(env, match[1], match[2]) } });
+      if (sigState === "bad") return new Response(method === "HEAD" ? null : svT(svLang(request), "이 파일 주소는 만료됐어요. 공유 페이지를 다시 열어 주세요."), { status: 403, headers: { ...PUBLIC_HEADERS, "x-robots-tag": "noindex, nofollow", "content-type": "text/plain; charset=utf-8" } });
+      // Only the Range header is passed on (a video seeks on a shared link too); cookies and caching headers are not.
+      const ranged = request.headers.get("range") ? new Request(request.url, { method, headers: { range: request.headers.get("range") } }) : undefined;
+      const media = variantWidth ? await serveVariant(env, match[2], Number(variantWidth), variantType) : await serveMedia(env, match[2], ranged);
+      if (!media.ok && media.status !== 416) return missing(method, request);
       const safeHeaders = new Headers(media.headers);
       for (const [name, value] of Object.entries(PUBLIC_HEADERS)) safeHeaders.set(name, value);
       if (variantWidth && media.headers.get("cache-control") === VARIANT_CACHE) safeHeaders.set("cache-control", VARIANT_CACHE);
       safeHeaders.set("x-robots-tag", "noindex, nofollow");
       safeHeaders.set("content-security-policy", "default-src 'none'; sandbox");
       safeHeaders.delete("set-cookie");
-      return new Response(method === "HEAD" ? null : media.body, { headers: safeHeaders });
+      return new Response(method === "HEAD" ? null : media.body, { status: media.status, headers: safeHeaders });
     }
     const contentHeaders = { ...PUBLIC_HEADERS, "x-robots-tag": robots, "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; frame-src 'self'; script-src '" + await svFrameResizeHash() + "'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'", ...(token.expires !== null ? { "x-acard-link-ends": String(token.expires) } : {}) };
     if (method === "HEAD") return new Response(null, { headers: contentHeaders });
@@ -856,7 +991,7 @@
     const children = [...model.parents].filter(([child, parent]) => parent === slug && reachable(child)).map(([child]) => child);
     const titles = children.length ? await db.prepare("SELECT slug, title FROM pages WHERE slug IN (" + children.map(() => "?").join(",") + ") AND kind != 'db_row' ORDER BY ord, title").bind(...children).all() : { results: [] };
     // Never ask pageShell, database expansion, tree, comments or backlinks for data.
-    const blocks = found.blocks.filter(block => !["breadcrumb", "db_ref", "embed"].includes(block.type));
+    const blocks = expanded.filter(block => !["breadcrumb", "db_ref", "embed"].includes(block.type));
     const pagePath = base + (slug !== String(rule.page) ? "/" + encodeURIComponent(slug) : "");
     const frameBlocks = new Map(blocks.filter(block => (block.type === "html" || block.type === "visual" || block.type === "part") && block.id).map(block => ["acv-f" + String(block.id).replace(/[^\w-]/g, ""), String(block.id)]));
     const imageIds = [...new Set(blocks.filter(block => block.type === "image").map(block => (/^\/media\/([0-9a-f]{16})$/.exec(String(block.meta?.src || "")) || [])[1]).filter(id => id && ids.has(id)).concat(coverMedia ? [coverMedia[1]] : []))];
@@ -870,7 +1005,7 @@
         if (element.tagName === "img") {
           const media = /^\/media\/([0-9a-f]{16})$/.exec(element.getAttribute("src") || "");
           if (media && ids.has(media[1])) {
-            const markup = variantMarkup(base, media[1], infos.get(media[1]), "(max-width: 800px) calc(" + figureShare + " * (100vw - 36px)), calc(" + figureShare + " * " + column + ")", firstImage);
+            const markup = variantMarkup(base, media[1], infos.get(media[1]), "(max-width: 800px) calc(" + figureShare + " * (100vw - 36px)), calc(" + figureShare + " * " + column + ")", firstImage, signed.get(media[1]));
             firstImage = false;
             // The reader's srcset names /media/<id>?w=, which is cookie-gated; a link visitor only reaches the token routes.
             for (const name of ["srcset", "sizes", "fetchpriority", "style"]) element.removeAttribute(name);
@@ -889,14 +1024,15 @@
           return;
         }
         if (["iframe", "script", "style", "link", "object", "embed"].includes(element.tagName)) { element.remove(); return; }
-        for (const name of ["src", "href"]) {
+        for (const name of ["src", "href", "poster"]) {
           const value = element.getAttribute(name);
           if (value === null) continue;
           const media = /^\/media\/([0-9a-f]{16})$/.exec(value);
           const local = /^\/([^/?#]+)\/?(#[^"]*)?$/.exec(value);
           let target = null;
           if (local) { try { target = resolveSlug(decodeURIComponent(local[1])); } catch { target = null; } }
-          if (media && ids.has(media[1])) element.setAttribute(name, base + "/media/" + media[1]);
+          if (media && ids.has(media[1])) element.setAttribute(name, base + "/media/" + media[1] + signed.get(media[1]));
+          else if (name === "poster") element.removeAttribute(name);
           else if (name === "href" && value.startsWith("#")) continue;
           else if (name === "href" && element.tagName === "a" && target && target !== String(rule.page) && reachable(target)) element.setAttribute(name, base + "/" + encodeURIComponent(target) + "/" + (local[2] || ""));
           else if (name === "href" && element.tagName === "a" && target === String(rule.page)) element.setAttribute(name, base + (local[2] || ""));
@@ -914,7 +1050,9 @@
     // A font-library page font (fonts/lib/<id>.css) rides inline too, its #main rules moved to this page's .sv-main (the CSP
     // takes inline styles and same-origin font files only). 명조 and 고정폭 shares keep their earlier look.
     const libraryFont = /^[a-z]+$/.test(String(found.settings?.font || "")) && !["default", "serif", "mono", "report"].includes(found.settings.font) ? found.settings.font : "";
-    const styles = await Promise.all(["style.css", "lazy/checks.css", ...(libraryFont ? ["fonts/lib/" + libraryFont + ".css"] : [])].map(async name => {
+    // fonts/fonts.css (Pretendard Hangul pieces by unicode-range) rides inline last: without it every syllable outside the
+    // 300-syllable core falls back to the system font mid-word (acard-font-fix).
+    const styles = await Promise.all(["style.css", "lazy/checks.css", ...(libraryFont ? ["fonts/lib/" + libraryFont + ".css"] : []), "fonts/fonts.css"].map(async name => {
       const asset = await env.ASSETS.fetch(new Request(new URL("/" + name, request.url)));
       return asset.ok ? (await asset.text()).replace(/@import\s+[^;]+;/g, "") : "";
     }));
@@ -941,32 +1079,33 @@
       }
     }
     const pageSettings = found.settings || {};
+    const lang = svLang(request);
     const bodyHtml = await content.text();
-    const headings = [...bodyHtml.matchAll(/<h([2345]) id="([^"]+)">([\s\S]*?)<\/h\1>/g)].map(m => ({ level: Number(m[1]), id: m[2], text: m[3].replace(/<[^>]+>/g, "").trim() })).filter(h => h.text);
+    const headings = [...bodyHtml.matchAll(/<h([2345]) id="([^"]+)"(?: class="acv-head" style="[^"]*")?>([\s\S]*?)<\/h\1>/g)].map(m => ({ level: Number(m[1]), id: m[2], text: m[3].replace(/<[^>]+>/g, "").trim() })).filter(h => h.text);
     const firstText = (found.blocks.find(block => block.type === "paragraph" && String(block.text || "").trim()) || {}).text || "";
-    const description = String(firstText).replace(/\s+/g, " ").trim().slice(0, 160) || (siteTitle || "Acard") + "에서 공유한 페이지예요.";
+    const description = String(firstText).replace(/\s+/g, " ").trim().slice(0, 160) || svSharedOn(lang, siteTitle || "Acard");
     // Canonical and og:url use the configured site origin (SITE_URL), not the request host: no query, no trailing slash.
     const siteOrigin = String(env.SITE_URL || new URL(request.url).origin).replace(/\/+$/, "");
     const pageUrl = siteOrigin + base + (slug !== String(rule.page) ? "/" + encodeURIComponent(slug) : "");
     let cover = coverHtml(found.page, pageSettings);
     if (coverMedia) {
-      const markup = variantMarkup(base, coverMedia[1], infos.get(coverMedia[1]), "100vw", true);
+      const markup = variantMarkup(base, coverMedia[1], infos.get(coverMedia[1]), "100vw", true, signed.get(coverMedia[1]));
       const attrs = Object.entries(markup.attrs).map(([name, value]) => " " + name + '="' + escapeHtml(value) + '"').join("");
       const img = '<img alt=""' + attrs + ">";
       cover = cover.replace(/<img [^>]*>/, () => markup.avif ? '<picture><source type="image/avif" srcset="' + markup.avif + '" sizes="100vw">' + img + "</picture>" : img);
     }
     else if (/^https?:/.test(String(pageSettings.cover || "").trim())) cover = coverHtml(found.page, { ...pageSettings, cover: "" });
-    const updated = found.page.updated ? new Date(Number(found.page.updated)).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Seoul" }) + "에 수정됨" : "";
+    const updated = found.page.updated ? svEdited(lang, found.page.updated) : "";
     // issue 114: an edit/comment link shows how to get that permission (email code, no account) instead of only the read-only stamp.
     const upgrade = rule.principal === "link" && (rule.role === "edit" || rule.role === "comment");
-    const stamp = rule.principal === "link" ? (upgrade ? (rule.role === "edit" ? "공유 링크 · 편집 허용" : "공유 링크 · 댓글 허용") : "공유 링크 · 읽기 전용") : siteTitle ? escapeHtml(siteTitle) : "공개 페이지 · 읽기 전용";
+    const stamp = rule.principal === "link" ? svT(lang, upgrade ? (rule.role === "edit" ? "공유 링크 · 편집 허용" : "공유 링크 · 댓글 허용") : "공유 링크 · 읽기 전용") : siteTitle ? escapeHtml(siteTitle) : svT(lang, "공개 페이지 · 읽기 전용");
     // A read-only link visitor can ask the owner for edit access (share_requests, approved in the share dialog).
-    const askHtml = rule.principal === "link" && rule.role === "read" ? '<p class="sv-edit"><a class="sv-btn" href="/s/' + wsTag(env) + "/r/" + encodeURIComponent(slug) + '?role=edit">' + "편집 권한 요청" + '</a><small>공유한 사람이 승인하면 이메일로 초대 링크와 코드를 받아요.</small></p>' : "";
-    const upgradeHtml = upgrade ? '<p class="sv-edit"><a class="sv-btn" href="/s/' + wsTag(env) + "/l/" + match[1] + '">' + (rule.role === "edit" ? "편집하려면 이메일로 확인" : "댓글을 달려면 이메일로 확인") + "</a><small>회원가입 없이 이메일로 받은 6자리 코드로 확인해요.</small></p>" : askHtml;
+    const askHtml = rule.principal === "link" && rule.role === "read" ? '<p class="sv-edit"><a class="sv-btn" href="/s/' + wsTag(env) + "/r/" + encodeURIComponent(slug) + '?role=edit">' + svT(lang, "편집 권한 요청") + "</a><small>" + svT(lang, "공유한 사람이 승인하면 이메일로 초대 링크와 코드를 받아요.") + "</small></p>" : "";
+    const upgradeHtml = upgrade ? '<p class="sv-edit"><a class="sv-btn" href="/s/' + wsTag(env) + "/l/" + match[1] + '">' + svT(lang, rule.role === "edit" ? "편집하려면 이메일로 확인" : "댓글을 달려면 이메일로 확인") + "</a><small>" + svT(lang, "회원가입 없이 이메일로 받은 6자리 코드로 확인해요.") + "</small></p>" : askHtml;
     const crumb = '<a class="sv-crumb" href="' + base + '"><span class="sv-ico">' + (rootRow ? pageIconHtml({ slug: String(rule.page) }, {}, 20) : shareIcon(pageIconHtml(found.page, pageSettings, 20))) + '</span><span>' + escapeHtml(String(rootRow ? rootRow.title : found.page.title)) + "</span></a>" +
       (rootRow ? '<span class="sv-sep">/</span><span class="sv-here">' + escapeHtml(found.page.title) + "</span>" : "");
-    const toc = headings.length >= 2 ? '<aside class="sv-toc" aria-label="목차"><details open><summary>목차</summary><ol>' + headings.map((h, i) => '<li class="l' + h.level + '"><a href="#' + escapeHtml(h.id) + '"><span class="n">' + (i + 1) + "</span>" + escapeHtml(h.text) + "</a></li>").join("") + "</ol></details></aside>" : "";
-    const cards = subRows.length ? '<section class="sv-subs" aria-label="하위 페이지"><h2>하위 페이지</h2><div class="sv-cards">' + subRows.map(row => {
+    const toc = headings.length >= 2 ? '<aside class="sv-toc" aria-label="' + svT(lang, "목차") + '"><details open><summary>' + svT(lang, "목차") + "</summary><ol>" + headings.map((h) => '<li class="l' + h.level + '"><a href="#' + escapeHtml(h.id) + '">' + escapeHtml(h.text) + "</a></li>").join("") + "</ol></details></aside>" : "";
+    const cards = subRows.length ? '<section class="sv-subs" aria-label="' + svT(lang, "하위 페이지") + '"><h2>' + svT(lang, "하위 페이지") + '</h2><div class="sv-cards">' + subRows.map(row => {
       const meta = subMeta.get(String(row.slug)) || {};
       return '<a class="sv-card" href="' + base + "/" + encodeURIComponent(String(row.slug)) + '/"><span class="sv-cico">' + pageIconHtml({ slug: String(row.slug), ws: "member" }, { icon: /^\/media\//.test(String(meta.icon || "")) ? "" : meta.icon || "" }, 24) + '</span><span class="sv-ct"><b>' + escapeHtml(String(row.title)) + "</b>" + (meta.text ? "<small>" + escapeHtml(String(meta.text).replace(/\s+/g, " ").slice(0, 70)) + "</small>" : "") + "</span></a>";
     }).join("") + "</div></section>" : "";
@@ -974,26 +1113,26 @@
     // Only a page the owner published with search allowed gets its own card; link shares and unlisted pages get the
     // generic Acard card so their title and text stay out of crawlers and link previews.
     const cardTitle = indexable ? found.page.title : siteTitle || "Acard";
-    const cardText = indexable ? description : (siteTitle || "Acard") + "에서 공유한 페이지예요.";
+    const cardText = indexable ? description : svSharedOn(lang, siteTitle || "Acard");
     // issue 118: the content hash in the URL makes messengers fetch a new card when og.png changes (build.ts fills the versions).
     const ogVersion = (globalThis.ACARD_STATIC_VERSIONS || {})["og.png"];
     const ogImage = siteOrigin + "/og.png" + (ogVersion ? "?v=" + ogVersion : "");
     const og = '<meta name="robots" content="' + (indexable ? "index" : "noindex") + '">' + (indexable ? '<meta name="description" content="' + escapeHtml(description) + '"><link rel="canonical" href="' + escapeHtml(pageUrl) + '"><link rel="sitemap" type="application/xml" href="' + escapeHtml(base + "/sitemap.xml") + '">' : "") +
       '<meta property="og:type" content="article"><meta property="og:site_name" content="' + escapeHtml(siteTitle || "Acard") + '"><meta property="og:title" content="' + escapeHtml(cardTitle) + '"><meta property="og:description" content="' + escapeHtml(cardText) + '">' +
-      '<meta property="og:url" content="' + escapeHtml(pageUrl) + '"><meta property="og:image" content="' + ogImage + '"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Acard"><meta property="og:locale" content="ko_KR">' +
+      '<meta property="og:url" content="' + escapeHtml(pageUrl) + '"><meta property="og:image" content="' + ogImage + '"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Acard"><meta property="og:locale" content="' + SV_LANG[lang].og + '">' +
       '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="' + escapeHtml(cardTitle) + '"><meta name="twitter:description" content="' + escapeHtml(cardText) + '"><meta name="twitter:image" content="' + ogImage + '">' +
-      (frameBlocks.size ? "<script>" + SV_FRAME_RESIZE + "</script>" : "") + '<link rel="icon" href="/favicon.svg" type="image/svg+xml"><style>' + styles.join("\n") + "\n" + VISUAL_CSS + "\n" +
+      (frameBlocks.size ? "<script>" + svFrameResize() + "</script>" : "") + '<link rel="icon" href="/favicon.svg" type="image/svg+xml"><style>' + styles.join("\n") + "\n" + VISUAL_CSS + "\n" +
       // notion-parity-1: block colors, heading 4 and toggle headings ride inline in reader pages; the sanitizer above drops
       // inline <style> from the body, so the shared page carries the same rules here (CSP and sanitizing unchanged).
-      BLOCK_COLOR_CSS + HEADING4_CSS + TOGGLE_HEADING_CSS + componentCss(componentIdsIn(bodyHtml)) + "\n" + SV_BASE_CSS + SV_PAGE_CSS + (isReportPage(pageSettings) ? REPORT_CSS : "") + (bodyHtml.includes('<span class="ev ev-') ? EVIDENCE_CSS : "") + "</style>";
+      BLOCK_COLOR_CSS + HEADING4_CSS + TOGGLE_HEADING_CSS + componentCss(componentIdsIn(bodyHtml)) + "\n" + SV_BASE_CSS + SV_PAGE_CSS + (isReportPage(pageSettings) ? REPORT_CSS : "") + (bodyHtml.includes('<span class="ev ev-') ? EVIDENCE_CSS : "") + (bodyHtml.includes('<sup class="fnref">') ? FOOTNOTE_CSS : "") + "</style>";
     const html = svPage(title,
-      '<header class="sv-bar"><nav class="sv-path" aria-label="위치">' + crumb + '</nav><span class="sv-grow"></span><a class="sv-made" href="/" aria-label="Acard로 만들었어요"><svg class="wordmark sv-wm" viewBox="0 0 375.59 100" role="img" aria-label="Acard" focusable="false"><use href="/wordmark-symbol.svg#w"/></svg><span>로 만들었어요</span></a><label for="sv-tt" class="sv-theme" title="테마 바꾸기">' + SV_MOON + "</label></header>" +
+      '<header class="sv-bar"><nav class="sv-path" aria-label="' + svT(lang, "위치") + '">' + crumb + '</nav><span class="sv-grow"></span><a class="sv-made" href="/" aria-label="' + svT(lang, "Acard로 만들었어요") + '">' + (SV_MADE[lang][0] ? '<span class="sv-pre">' + SV_MADE[lang][0] + "</span>" : "") + '<svg class="wordmark sv-wm" viewBox="0 0 375.59 100" role="img" aria-label="Acard" focusable="false"><use href="/wordmark-symbol.svg#w"/></svg>' + (SV_MADE[lang][1] ? "<span>" + SV_MADE[lang][1] + "</span>" : "") + '</a><label for="sv-tt" class="sv-theme" title="' + svT(lang, "테마 바꾸기") + '">' + SV_MOON + "</label></header>" +
       '<div class="sv-cover">' + cover + "</div>" +
       '<div class="sv-wrap' + (toc ? " has-toc" : "") + (pageSettings.width === "full" ? " sv-full" : pageSettings.width === "normal" ? " sv-normal" : "") + (isReportPage(pageSettings) ? " rp" : "") + (pageSettings.small === true ? " small-text" : "") + '"><main class="sv-main"><article><div class="sv-icon" aria-hidden="true">' + shareIcon(pageIconHtml(found.page, pageSettings, 88)) + "</div>" +
       '<h1 class="sv-title">' + escapeHtml(found.page.title) + '</h1><p class="sv-meta">' + (updated ? '<span class="sv-when">' + SV_CLOCK + "<span>" + updated + "</span></span>" : "") + '<span class="sv-pill"><span class="sv-pill-in">' + (rule.principal === "link" ? SV_LOCK : SV_GLOBE) + stamp + "</span></span></p>" + upgradeHtml +
       '<div class="sv-toc-narrow">' + toc + '</div><div class="blocks">' + bodyHtml + "</div>" + cards + "</article></main>" + toc.replace('class="sv-toc"', 'class="sv-toc sv-toc-wide"') + "</div>" +
-      '<footer class="sv-foot"><a href="/"><img src="/logo.svg" alt="" width="16" height="16">Acard로 만들었어요</a></footer>', og, theme);
-    return new Response(html, { headers: contentHeaders });
+      '<footer class="sv-foot"><a href="/"><img src="/logo.svg" alt="" width="16" height="16">' + svT(lang, "Acard로 만들었어요") + "</a></footer>", og, theme, lang);
+    return new Response(html, { headers: { ...contentHeaders, "content-language": SV_LANG[lang].html, vary: "Cookie, Accept-Language" } });
   }
 
   function agentKey(principal) {

@@ -1,7 +1,7 @@
 import { equationHtml } from "./equation-html.js";
-import { visualBlockHtml } from "./visual-html.js";
-import { partBlockHtml, partSuggestLine } from "./part-html.js";
-import { renderComponentBlock, fallbackCardHtml, componentOwnCss, familyCss, getComponent, COMPONENT_BASE_CSS } from "./component-registry.js";
+import { visualBlockHtml, htmlHeadings } from "./visual-html.js";
+import { partBlockHtml, partSuggestLine, PART_DEFAULT_IDS, PART_RUNTIME } from "./part-html.js";
+import { renderComponentBlock, fallbackCardHtml, componentOwnCss, familyCss, getComponent, COMPONENT_BASE_CSS, uiDataIsEnglish, footnoteOrder, FOOTNOTE_REF } from "./component-registry.js";
 import "./components/index.js";
 import "./assets/editor-model.js";
 
@@ -11,9 +11,36 @@ function escapeHtml(value) {
 
 
 function blockInline(block) {
-  if (block.meta && Array.isArray(block.meta.richText) && globalThis.EditorModel) return evidenceTags(globalThis.EditorModel.richHtml(wikiRuns(block.meta.richText), block.text));
-  return inline(block.text);
+  if (block.meta && Array.isArray(block.meta.richText) && globalThis.EditorModel) return footnoteRefs(evidenceTags(globalThis.EditorModel.richHtml(wikiRuns(block.meta.richText), block.text)));
+  return footnoteRefs(inline(block.text));
 }
+
+// Footnote references (acard-footnote-fix): [^id] in text naming a note of the page's footnotes block draws as a linked
+// superscript number (citation order, component-registry.js footnoteOrder); the note's ↩ comes back to the first one.
+// Runs on finished inline HTML, outside tags, code and links; a mark naming no note stays as typed.
+let pageFootnotes = null;
+const footnoteCited = new Set();
+function footnoteRefs(html) {
+  if (!pageFootnotes || !pageFootnotes.size || !html.includes("[^")) return html;
+  let inCode = 0, inLink = 0;
+  return html.split(/(<[^>]*>)/).map((part) => {
+    if (part.startsWith("<")) {
+      const tag = /^<(\/?)(code|a)\b/i.exec(part);
+      if (tag) { const d = tag[1] ? -1 : 1; if (tag[2].toLowerCase() === "code") inCode += d; else inLink += d; }
+      return part;
+    }
+    if (inCode > 0 || inLink > 0) return part;
+    return part.replace(FOOTNOTE_REF, (mark, id) => {
+      const n = pageFootnotes.get(id);
+      if (!n) return mark;
+      const first = !footnoteCited.has(id);
+      footnoteCited.add(id);
+      return '<sup class="fnref"><a href="#fn-' + id + '"' + (first ? ' id="fnref-' + id + '"' : "") + ">" + n + "</a></sup>";
+    });
+  }).join("");
+}
+// Superscript in the link color and the small type step; a jumped-to citation shows like a jumped-to note (li:target).
+export const FOOTNOTE_CSS = ".fnref{font-size:var(--fs-12);line-height:0;vertical-align:super;font-variant-numeric:tabular-nums}.fnref a{padding:0 1px;color:var(--accent);text-decoration:none;scroll-margin-top:var(--space-6)}.fnref a:hover{text-decoration:underline}.fnref a:target{border-radius:var(--radius-2xs);background:var(--color-accent-soft)}";
 
 // [[대상]], [[대상|별칭]], [[대상#제목]]: 대상은 슬러그가 먼저, 아니면 휴지통 밖 페이지 제목(대소문자·공백 무시, 최근 수정 우선).
 // 제목 목록(index)이 없으면 공백 없는 대상만 슬러그로 본다. renderBlocks 가 ctx.pages 로 한 번 만들어 wikiPages 에 둔다.
@@ -168,7 +195,7 @@ const RP = ".rp";
 export const REPORT_CSS = [
   RP + "{counter-reset:rp-eq rp-fig}",
   RP + " .mathblock{position:relative;counter-increment:rp-eq;padding-inline:3.2em}" + RP + " .mathblock::after{content:'(' counter(rp-eq) ')';position:absolute;right:var(--space-4);top:50%;transform:translateY(-50%);font-size:var(--fs-13);color:var(--fg-dim);font-style:normal;font-variant-numeric:tabular-nums}",
-  RP + " figure:has(figcaption){counter-increment:rp-fig}" + RP + " figure figcaption::before{content:'\\ADF8\\B9BC  ' counter(rp-fig) '. ';font-weight:600}",
+  RP + " figure:has(figcaption){counter-increment:rp-fig}" + RP + " figure figcaption::before{content:'\\ADF8\\B9BC  ' counter(rp-fig) '. ';font-weight:600}" + RP + " figure:lang(en) figcaption::before{content:'Figure ' counter(rp-fig) '. '}",
   "@media (max-width:500px){" + RP + " .mathblock{padding-inline:2.4em}}",
 ].join("");
 export const isReportPage = (settings) => Boolean(settings && settings.font === "report");
@@ -221,22 +248,30 @@ const TOC_FOLD_AT = 12;
 
 // Inline once per page that has agent images, so the reader's first screen stays the same and the published page's
 // CSP (style-src 'unsafe-inline' only) still applies it.
-const AGENT_MEDIA_STYLE = "<style>.blocks .imgby{display:inline-flex;align-items:center;gap:6px;margin:14px 0 -8px;padding:3px 10px;border-radius:8px;background:rgba(123,104,238,.1);color:#5b47d6;font-size:var(--fs-13);font-weight:600}.blocks .imgby .ico{width:15px;height:15px}.blocks .imgrow{display:flex;gap:14px;margin:18px 0}.blocks .imgrow figure.img{margin:0;min-width:0}.blocks figure.img .imgview{position:relative}.blocks .imgtime{position:absolute;left:8px;bottom:8px;padding:2px 8px;border-radius:6px;background:rgba(20,20,30,.72);color:#fff;font-size:var(--fs-13);font-variant-numeric:tabular-nums}@media (max-width:640px){.blocks .imgrow{flex-direction:column}}</style>";
+const AGENT_MEDIA_STYLE = "<style>.blocks .imgby{display:inline-flex;align-items:center;gap:6px;margin:14px 0 -8px;padding:3px 10px;border-radius:8px;background:rgba(123,104,238,.1);color:#5b47d6;font-size:var(--fs-13);font-weight:600}.blocks .imgby .ico{width:15px;height:15px}.blocks .imgrow{display:flex;flex-wrap:wrap;gap:14px;margin:18px 0}.blocks .imgrow figure.img{margin:0;min-width:min(120px,100%)}.blocks .imgmiss{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:96px;padding:14px;border:1px dashed var(--line);border-radius:var(--radius-md);background:var(--bg-soft);color:var(--fg-dim);font-size:var(--fs-13);text-align:center}.blocks .imgmiss small{font-size:var(--fs-12);opacity:.8;overflow-wrap:anywhere}.blocks figure.img .imgview{position:relative}.blocks .imgtime{position:absolute;left:8px;bottom:8px;padding:2px 8px;border-radius:6px;background:rgba(20,20,30,.72);color:#fff;font-size:var(--fs-13);font-variant-numeric:tabular-nums}@media (max-width:640px){.blocks .imgrow{flex-direction:column}}</style>";
 
 function figureHtml(block, inRow) {
   const meta = block.meta || {};
   const src = String(meta.src || "");
-  if (!globalThis.EditorModel.safeHref(src)) return "<p>" + escapeHtml(src) + "</p>";
   const width = Number.isFinite(meta.width) ? Math.min(100, Math.max(10, meta.width)) : 100;
+  const box = ' style="' + (inRow ? (width < 100 ? "flex:0 1 " + width + "%" : "flex:1 1 0") : "width:" + width + "%") + '"';
+  const caption = block.text ? "<figcaption>" + inline(block.text) + "</figcaption>" : "";
+  // Issue 176: an address the browser cannot load (a local path the agent's machine never uploaded, e.g. a Codex clipboard
+  // temp file) draws a placeholder with the file name instead of the raw path, and keeps its place in the row.
+  if (!globalThis.EditorModel.safeHref(src)) {
+    const name = /^data:/i.test(src) ? "" : src.split(/[\\/]/).pop().slice(0, 80);
+    return '<figure class="img"' + box + '><div class="imgmiss" role="img" aria-label="이미지를 불러올 수 없어요"><span>이미지를 불러올 수 없어요</span>' + (name ? "<small>" + escapeHtml(name) + "</small>" : "") + "</div>" + caption + "</figure>";
+  }
   const alt = block.text || "이미지";
   const time = typeof meta.time === "string" && /^\d{1,2}(?::\d{2}){1,2}$/.test(meta.time) ? meta.time : "";
   const dimensions = Number.isFinite(meta.iw) && meta.iw > 0 && Number.isFinite(meta.ih) && meta.ih > 0 ? ' width="' + meta.iw + '" height="' + meta.ih + '" style="height:auto"' : "";
   const media = /^\/media\/[^/?#]+$/.test(src) && !/\.(svg|gif)$/i.test(src) && !/^image\/(svg|gif)/i.test(meta.mime || meta.type || "");
   const responsive = media ? ' srcset="' + [400, 800, 1600].map((w) => escapeHtml(src) + '?w=' + w + ' ' + w + 'w').join(', ') + '" sizes="(max-width: 760px) 100vw, 760px"' : "";
-  return '<figure class="img" style="' + (inRow ? (width < 100 ? "flex:0 1 " + width + "%" : "flex:1 1 0") : "width:" + width + "%") + '">' +
+  // An English caption marks the figure lang="en", so a report page numbers it "Figure N." (REPORT_CSS) instead of 그림 N.
+  return '<figure class="img"' + (block.text && uiDataIsEnglish(block.text) ? ' lang="en"' : "") + box + ">" +
     '<a class="imgview" href="' + escapeHtml(src) + '"><img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt) + '"' + dimensions + responsive + ' decoding="async" loading="lazy">' +
     (time ? '<span class="imgtime">' + time + "</span>" : "") + "</a>" +
-    (block.text ? "<figcaption>" + inline(block.text) + "</figcaption>" : "") +
+    caption +
     "</figure>";
 }
 
@@ -264,6 +299,30 @@ function columnTemplate(widths, n) {
 // Types the switch above handles without output when empty (no fallback card for them).
 const KNOWN_EMPTY = new Set(["paragraph", "subpage", "photo-text"]);
 
+// Expanded blocks are response-only. Never put these IDs or flags back into page storage.
+export function materializeSyncedBlocks(blocks, resolved = [], canonicalEditable = false) {
+  const instances = new Map(resolved.map(item => [item.id, item]));
+  const out = [];
+  const hex = value => Array.from(String(value)).map(char => char.codePointAt(0).toString(16).padStart(6, "0")).join("");
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    if (block.type !== "synced") { out.push(block); continue; }
+    while (index + 1 < blocks.length && (blocks[index + 1].indent || 0) > (block.indent || 0)) index++;
+    const item = instances.get(block.id);
+    if (item?.status !== "available") {
+      out.push({ id: block.id, type: "paragraph", text: "Synced content unavailable", indent: block.indent || 0, syncedUnavailable: true });
+      continue;
+    }
+    if (canonicalEditable && block.meta?.synced?.source === null) {
+      out.push(...item.blocks.map(child => ({ ...child, indent: (block.indent || 0) + (child.indent || 0) })));
+      continue;
+    }
+    const scope = "synced-" + hex(block.id) + "-";
+    out.push(...item.blocks.map(child => ({ ...child, id: scope + hex(child.id), indent: (block.indent || 0) + (child.indent || 0), syncedScope: scope, syncedReadOnly: true })));
+  }
+  return out;
+}
+
 export function renderBlocks(blocks, ctx, headingContext) {
   if (!headingContext && ctx && Array.isArray(ctx.pages) && wikiPages === null) {
     wikiPages = ctx.wikiPages || (ctx.wikiPages = wikiIndex(ctx.pages));
@@ -271,7 +330,21 @@ export function renderBlocks(blocks, ctx, headingContext) {
   }
   // Old text-only columns draw as column blocks (notion-parity C13); a nested call already has converted input.
   if (!headingContext && globalThis.ColumnsModel) blocks = globalThis.ColumnsModel.columnsFromLegacy(blocks);
+  // Footnote numbers are set once per page in text order; nested calls (children, columns) share them.
+  if (!headingContext) {
+    const saved = pageFootnotes, savedCited = new Set(footnoteCited);
+    pageFootnotes = footnoteOrder(blocks);
+    footnoteCited.clear();
+    try { return renderBlocksIn(blocks, ctx, headingContext); }
+    finally { pageFootnotes = saved; footnoteCited.clear(); savedCited.forEach((id) => footnoteCited.add(id)); }
+  }
+  return renderBlocksIn(blocks, ctx, headingContext);
+}
+
+function renderBlocksIn(blocks, ctx, headingContext) {
   const out = [];
+  // The heading right before a block at this level: a footnotes or references block under the same words hides its title.
+  let prevHeading = "";
   let listType = null;
   let listItems = [];
 
@@ -297,12 +370,24 @@ export function renderBlocks(blocks, ctx, headingContext) {
   const colorStyle = () => { if (colorOnce.done || (ctx && ctx.blockColorCss)) return ""; colorOnce.done = true; if (ctx) ctx.blockColorCss = true; return BLOCK_COLOR_STYLE; };
   for (const block of headingContext ? [] : blocks) {
     if (block.type === "heading1" || block.type === "heading2" || block.type === "heading3" || block.type === "heading4") {
-      const base = headingSlug(block.text);
+      const base = (block.syncedScope || "") + headingSlug(block.text);
       const n = seen.get(base) || 0;
       seen.set(base, n + 1);
       const id = n > 0 ? base + "-" + (n + 1) : base;
       headingIds.set(block.id, id);
       headings.push({ id, text: block.text, level: Number(block.type.slice(-1)) + 1 });
+    } else if (block.type === "html" && block.id) {
+      // Headings inside an HTML block join the TOCs in block order (h1 like a heading1 block); visual-html.js draws
+      // their anchors with these ids. Keyed by the block id: a heading block never shares an id with an HTML block.
+      const ids = htmlHeadings(block.text).map((h) => {
+        const base = (block.syncedScope || "") + headingSlug(h.text);
+        const n = seen.get(base) || 0;
+        seen.set(base, n + 1);
+        const id = n > 0 ? base + "-" + (n + 1) : base;
+        headings.push({ id, text: h.text, level: Math.min(5, h.level + 1) });
+        return id;
+      });
+      if (ids.length) headingIds.set(block.id, ids);
     }
   }
 
@@ -316,10 +401,12 @@ export function renderBlocks(blocks, ctx, headingContext) {
 
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index];
+    const parentCtx = ctx;
+    if (block.syncedReadOnly) ctx = { ...ctx, page: { ...ctx?.page, readOnly: true }, syncedReadOnly: true };
     let end = index + 1;
     while (end < blocks.length && (blocks[end].indent || 0) > (block.indent || 0)) end += 1;
     const branch = blocks.slice(index + 1, end);
-    const childHtml = branch.length && block.type !== "columns" ? renderBlocks(branch, ctx, { headingIds, headings, colorOnce }) : "";
+    const childHtml = branch.length && block.type !== "columns" && block.type !== "synced" ? renderBlocks(branch, ctx, { headingIds, headings, colorOnce }) : "";
     index = end - 1;
     const type = block.type;
     const toggleHeading = /^heading[1-4]$/.test(type) && !!(block.meta && block.meta.toggle === true);
@@ -327,6 +414,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
     const anchor = block.id ? '<span id="block-' + escapeHtml(block.id) + '"></span>' : "";
     const outputStart = out.length;
     switch (type) {
+      case "synced": out.push('<p class="synced-unavailable" role="status">Synced content unavailable</p>'); break;
       case "heading1": case "heading2": case "heading3": case "heading4": {
         const tag = "h" + (Number(type.slice(-1)) + 1);
         const tgStyle = toggleHeading && !colorOnce.tg && !(ctx && ctx.toggleHeadingCss) ? (colorOnce.tg = true, ctx && (ctx.toggleHeadingCss = true), TOGGLE_HEADING_STYLE) : "";
@@ -335,13 +423,16 @@ export function renderBlocks(blocks, ctx, headingContext) {
         out.push(toggleHeading ? tgStyle + '<details class="toggle heading"' + (block.meta.open ? " open" : "") + "><summary>" + head + "</summary>" + childHtml + "</details>" : head);
         break;
       }
-      case "paragraph": out.push("<p>" + blockInline(block) + "</p>"); break;
+      case "paragraph": out.push((block.syncedUnavailable ? '<p class="synced-unavailable" role="status">' : "<p>") + blockInline(block) + "</p>"); break;
       case "bulleted":
       case "numbered": {
         if (listType && listType !== type) flushList();
         listType = type;
         const color = blockColor(block.meta && block.meta.color);
-        listItems.push("<li" + (color ? ' class="' + color + '"' : "") + ">" + (color ? colorStyle() : "") + anchor + blockInline(block) + childHtml + "</li>");
+        const content = childHtml && typeof block.meta?.open === "boolean"
+          ? '<details class="toggle"' + (block.meta.open ? " open" : "") + "><summary>" + blockInline(block) + "</summary>" + childHtml + "</details>"
+          : blockInline(block) + childHtml;
+        listItems.push("<li" + (color ? ' class="' + color + '"' : "") + ">" + (color ? colorStyle() : "") + anchor + content + "</li>");
         break;
       }
       case "to_do":
@@ -357,13 +448,14 @@ export function renderBlocks(blocks, ctx, headingContext) {
         break;
       case "quote": out.push("<blockquote>" + blockInline(block).replace(/\n/g, "<br>") + "</blockquote>"); break;
       case "code": out.push("<pre><code>" + escapeHtml(block.text) + "</code></pre>"); break;
-      case "diagram": case "chart": case "visual": case "html": out.push(visualBlockHtml(block, block.id || String(index))); break;
+      case "diagram": case "chart": case "visual": case "html": out.push(visualBlockHtml(block, block.id || String(index), type === "html" ? headingIds.get(block.id) : null)); break;
       case "part":
-        out.push(partBlockHtml(block, block.id || String(index)));
+        out.push(partBlockHtml(block, block.id || String(index), ctx?.syncedReadOnly && PART_DEFAULT_IDS.has(String(block.meta?.part || "")) ? { code: PART_RUNTIME } : undefined));
         // #38: the page script that hands each part frame its code, once per page (immutable ?v= file).
         if (ctx && !ctx.partsLoaded) { ctx.partsLoaded = true; out.push('<script src="/lazy/parts.js?v=__PARTS_JS__" async></script>'); }
         break;
       case "journal": {
+        if (ctx?.syncedReadOnly) { out.push("<p>Journal</p>"); break; }
         const meta = block.meta || {};
         const attrs = ["session", "agent", "day", "memory"].filter((k) => typeof meta[k] === "string").map((k) => " data-" + k + '="' + escapeHtml(meta[k]) + '"').join("");
         out.push('<div class="journal-embed"' + attrs + (meta.digest ? ' data-digest="1"' : "") + '><p class="journal-loading">작업 기록을 불러오는 중이에요…</p></div>');
@@ -390,7 +482,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
             index += 1;
           }
         }
-        const css = row.some((b) => b.meta.agent || b.meta.group || b.meta.time) && !(ctx && ctx.agentMediaCss);
+        const css = row.some((b) => b.meta.agent || b.meta.group || b.meta.time || !globalThis.EditorModel.safeHref(String(b.meta.src))) && !(ctx && ctx.agentMediaCss);
         if (css && ctx) ctx.agentMediaCss = true;
         out.push((css ? AGENT_MEDIA_STYLE : "") +
           (row.some((b) => b.meta.agent) ? '<p class="imgby">' + ico("sparkles") + "에이전트가 붙임</p>" : "") +
@@ -405,7 +497,11 @@ export function renderBlocks(blocks, ctx, headingContext) {
         const vm = /^(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/.exec(url);
         if (yt) out.push('<div class="media16"><iframe src="https://www.youtube-nocookie.com/embed/' + yt[1] + '" title="영상" loading="lazy" allowfullscreen></iframe></div>');
         else if (vm) out.push('<div class="media16"><iframe src="https://player.vimeo.com/video/' + vm[1] + '" title="영상" loading="lazy" allowfullscreen></iframe></div>');
-        else out.push('<video controls preload="metadata" src="' + escapeHtml(url) + '"></video>');
+        else {
+          // A first-frame picture the editor took before uploading (meta.poster, an /media/ address) shows before playback.
+          const poster = String((block.meta && block.meta.poster) || "");
+          out.push('<video controls preload="metadata"' + (/^\/media\/[0-9a-f]{16}$/.test(poster) ? ' poster="' + poster + '"' : "") + ' src="' + escapeHtml(url) + '"></video>');
+        }
         break;
       }
       case "audio": {
@@ -472,7 +568,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
         const columns = Array.isArray(meta.columns) ? meta.columns : [];
         const rows = Array.isArray(meta.rows) ? meta.rows : [];
         if (!columns.length) break;
-        const isDatabase = ctx && ctx.page && ctx.page.kind === "db";
+        const isDatabase = ctx && !ctx.syncedReadOnly && ctx.page && ctx.page.kind === "db";
         // #34: the leftmost box only shows a 상태 완료 row on database-style tables; a plain table has no box column
         // (it looked like a to-do box but did nothing). A cell written "[ ]" / "[x]" is a real checkbox instead.
         const doneCol = isDatabase && columns.indexOf("상태") >= 0;
@@ -519,7 +615,8 @@ export function renderBlocks(blocks, ctx, headingContext) {
           items = headings.map(item).join("");
         }
         // The whole TOC folds to a one-line summary (목차 · N); it starts open.
-        out.push('<nav class="tocblock"><details open><summary><h3>목차</h3>' + (headings.length ? ' <span class="tcount">' + headings.length + "</span>" : "") + "</summary><ul>" + (items || '<li class="tempty">아래에 제목이 없어요</li>') + "</ul></details></nav>");
+        // The heading reads "Contents" when every heading it lists is English, like the components' own words.
+        out.push('<nav class="tocblock"><details open><summary><h3>' + (headings.length && headings.every((h) => uiDataIsEnglish(h.text)) ? "Contents" : "목차") + "</h3>" + (headings.length ? ' <span class="tcount">' + headings.length + "</span>" : "") + "</summary><ul>" + (items || '<li class="tempty">아래에 제목이 없어요</li>') + "</ul></details></nav>");
         break;
       }
       case "breadcrumb": {
@@ -549,7 +646,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
           const color = /^(gray|brown|orange|yellow|green|blue|purple|pink|red)$/.test(String(meta.color || "")) ? " btn-" + meta.color : "";
           const icon = meta.icon ? '<span class="btn-ico" aria-hidden="true">' + escapeHtml(String(meta.icon).slice(0, 8)) + "</span>" : "";
           const readOnly = ctx && ctx.page && ctx.page.readOnly;
-          out.push('<p class="btnrow"><button type="button" class="btn act' + color + '" data-button="' + escapeHtml(block.id) + '"' + (confirm ? ' data-confirm="' + escapeHtml(String(confirm.message || "실행할까요?")) + '"' : "") + (readOnly ? " disabled" : "") + ">" + icon + (block.text ? inline(block.text) : "버튼") + "</button></p>");
+          out.push('<p class="btnrow"><button type="button" class="btn act' + color + '"' + (ctx?.syncedReadOnly ? "" : ' data-button="' + escapeHtml(block.id) + '"' + (confirm ? ' data-confirm="' + escapeHtml(String(confirm.message || "실행할까요?")) + '"' : "")) + (readOnly ? " disabled" : "") + ">" + icon + (block.text ? inline(block.text) : "버튼") + "</button></p>");
           // Inline loader, not <script src>: reader navigation swaps <main> and replays only inline scripts.
           if (ctx && !ctx.buttonsLoaded) { ctx.buttonsLoaded = true; out.push('<link rel="stylesheet" href="/lazy/buttons.css?v=__BUTTONS_CSS__">' + (readOnly ? "" : '<script>window.AcardButtons||document.head.appendChild(Object.assign(document.createElement("script"),{src:"/lazy/buttons.js?v=__BUTTONS_JS__"}))</script>')); }
           break;
@@ -572,7 +669,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
       case "component": {
         const uiCss = uiStyle(String((block.meta && block.meta.ui) || ""));
         if (uiCss) out.push(uiCss);
-        out.push(renderComponentBlock(block));
+        out.push(renderComponentBlock(block, { footnotes: pageFootnotes, heading: prevHeading }));
         break;
       }
       // Unknown types keep their text as a paragraph (unchanged); a text-less unknown block (a type a newer build
@@ -587,14 +684,16 @@ export function renderBlocks(blocks, ctx, headingContext) {
       out.splice(outputStart, 0, '<div class="human-block' + (block.meta.suggest ? " has-suggest" : "") + '"><span class="human-tag">' + ico("lock") + "사람이 고친 문단 · 보호됨</span>");
       out.push("</div>");
     }
-    if (block.meta && block.meta.suggest && block.id) out.push(suggestHtml(block));
+    if (block.meta && block.meta.suggest && block.id && !ctx?.syncedReadOnly) out.push(suggestHtml(block));
     if (out.length > outputStart && type !== "bulleted" && type !== "numbered") out.splice(outputStart, 0, anchor);
     // #34: the toggle code and styles load only on pages that have a checkable box.
-    if (ctx && !ctx.checksLoaded && out.slice(outputStart).some((html) => html.includes(" data-check=") || html.includes(" data-suggest=") || html.startsWith('<div class="callout summary"') || html.startsWith('<div class="callout sources"'))) {
+    if (ctx && !ctx.syncedReadOnly && !ctx.checksLoaded && out.slice(outputStart).some((html) => html.includes(" data-check=") || html.includes(" data-suggest=") || html.startsWith('<div class="callout summary"') || html.startsWith('<div class="callout sources"'))) {
       ctx.checksLoaded = true;
       out.push('<link rel="stylesheet" href="/lazy/checks.css?v=__CHECKS_CSS__"><script src="/lazy/checks.js?v=__CHECKS_JS__" defer></script>');
     }
     if (childHtml && !toggleHeading && !["toggle", "bulleted", "numbered", "callout", "column"].includes(type)) out.push('<div class="block-children">' + childHtml + '</div>');
+    prevHeading = /^heading[1-4]$/.test(type) ? String(block.text || "") : "";
+    ctx = parentCtx;
   }
   flushList();
   let html = out.join("\n");
@@ -604,6 +703,7 @@ export function renderBlocks(blocks, ctx, headingContext) {
     return before + 'loading="eager" fetchpriority="high"';
   });
   if (!headingContext && !(ctx && ctx.evidenceCss) && html.includes('<span class="ev ev-')) { if (ctx) ctx.evidenceCss = true; html = "<style>" + EVIDENCE_CSS + "</style>" + html; }
+  if (!headingContext && !(ctx && ctx.footnoteCss) && html.includes('<sup class="fnref">')) { if (ctx) ctx.footnoteCss = true; html = "<style>" + FOOTNOTE_CSS + "</style>" + html; }
   return html;
 }
 

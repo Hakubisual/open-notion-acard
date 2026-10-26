@@ -70,10 +70,29 @@ test("the kill switch: any ACARD_GUIDE other than on turns the API off, even wit
   expect((await post(h, { action: "restart" })).data).toEqual({ enabled: false, active: false });
 });
 
+test("editTools follows HUMAN_EDIT: on only when the right-click tools and Tab palette are on for everyone (#149)", async () => {
+  const h = harness("on", true);
+  expect((await h.call("GET", "/api/guide")).data.editTools).toBeNull();
+  (h.env as any).HUMAN_EDIT = "flagged";
+  expect((await h.call("GET", "/api/guide")).data.editTools).toBeNull();
+  (h.env as any).HUMAN_EDIT = "on";
+  const s = (await h.call("GET", "/api/guide")).data;
+  expect(s.required).toBe(4);
+  for (const part of ["오른쪽 클릭(휴대폰은 블록 핸들 길게 누르기) = 블록 도구", "드래그하고 오른쪽 클릭 = 그 부분만 바꾸는 도구", "빈 줄에서 Tab = 기능 찾기"]) expect(s.editTools).toContain(part);
+});
+
 test("guests cannot read or change the guide", async () => {
   const h = harness("on", true);
   (h.env as any).ACARD_SESSION = "guest";
   expect((await h.call("GET", "/api/guide")).status).toBe(401);
+});
+
+test("a downloaded HTML export gets no app scripts", async () => {
+  const download = new Response("<html><body><main>exported</main></body></html>", { headers: { "content-type": "text/html; charset=utf-8", "content-disposition": 'attachment; filename="page.html"' } });
+  const out = await injectAppBeta(download, { ACARD_GUIDE: "on" } as any).text();
+  expect(out).not.toContain("/_site/beta.js");
+  expect(out).not.toContain("/_site/welcome-guide.js");
+  expect(out).toContain("exported");
 });
 
 const realFetch = globalThis.fetch;
@@ -111,7 +130,7 @@ test("onboarding finish marks the workspace only the first time and only while t
   for (const [profile, flag, expected] of cases) {
     const { outbox, token } = await finish(profile, flag);
     const url = new URL("https://notes.example.com/api/profile");
-    const body = profile ? { finish: true } : { display_name: "a", handle: "aaa", finish: true };
+    const body = profile ? { finish: true } : { display_name: "a", handle: "aaa", finish: true, consent: ["terms", "privacy", "overseas"] };
     const res = await accountApi(new Request(url, { method: "POST", body: JSON.stringify(body), headers: { origin: "https://notes.example.com", "content-type": "application/json", cookie: "acard_at=" + token } }), { ...env, OUTBOX: outbox, ...(flag ? { ACARD_GUIDE: flag } : {}) }, url);
     if (res.status === 401) { expect.unreachable("session not accepted: " + (await res.text())); }
     expect([profile, flag, [...outbox.map.keys()].some((k) => k.startsWith("guide-new:"))]).toEqual([profile, flag, expected]);

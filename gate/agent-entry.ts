@@ -14,21 +14,24 @@ import {
   MEMBER_SHARE, OWNER_WS, clearSessionCookies, memberAssets, memberToken, oauthUserId, parseToken, readCookies, readSession,
   setCookie, workspaceEnv, workspaceFromOauthUser, workspaceIdFor, type Session, type TenancyEnv,
 } from "./tenancy";
+import { purgeConsents } from "./consent";
 import { ACCOUNT_API, accountApi, loadProfile, onboardedKey, redirect, withCookies, type AccountEnv } from "./account";
-import { BETA_API, betaAccessFor, betaApi, betaClosed, hasBetaAccess, injectAppBeta, injectGuide, isBetaAdmin, rewriteLanding, type BetaEnv } from "./hosted-access";
+import { BETA_API, WEB_INTERNAL_MSG, betaAccessFor, betaApi, betaChromeFor, betaClosed, injectAppBeta, injectGuide, isBetaAdmin, rewriteAuthInternal, rewriteLanding, rewriteNavInternal, webEntryAllowed, webInternal, type BetaEnv } from "./hosted-access";
 import { rewriteLandingLinks } from "./landing-links";
-import { HOME_PATH, handleFromPath, handleNoticePage, handleOwner, rewriteMyHome } from "./home-first";
+import { HOME_PATH, handleFromPath, handleNoticePage, handleOwner, rewriteMyHome, rewriteSiteNav } from "./home-first";
 import { ADMIN_PATH, adminRoute, isSuspended, myUsage, type AdminEnv } from "./hosted-console";
 import { connect as liveConnect, newSink, publish as livePublish, trackDb, type LiveNamespace, type Sink } from "./live";
 import { injectAppLang, isLang, langCookie, langSwitch, localizeJson, pickLang, pickUserLang, translateHtml, type Lang } from "./i18n";
 import { cacheVersioned, serviceWorkerOff } from "./static-cache";
 import { robotsTxt, seoResponse, sitemapXml } from "./seo";
 import { releaseRoute, withReleaseInfo } from "./releases";
+import { githubStarsResponse } from "./github-stars";
 import { migrateMediaPage, quarantineOriginal, r2Usage, restoreOriginal, withR2Media, type R2Like } from "./media-store";
+import { withMediaBucket, type BucketEnv } from "./object-store";
 import { scanWorkspace } from "./media-orphans";
 import { checkAgentWrites, isRestWrite, mcpWriteCalls, type WriteLimitEnv } from "./agent-write-limit";
 import { BILLING_ROUTES, checkoutFor, donePage as billingDone, webhook as billingWebhook, type BillingEnv } from "./hosted-billing";
-import { CLOUD_V1, cloudAdmin, cloudV1, cookieExport, isPublishWorkspace, planOf, publicGate, reportRoute, sb, withReportFooter, type CloudEnv, type CloudHost } from "./hosted-cloud";
+import { CLOUD_V1, claimCompPass, cloudAdmin, cloudV1, cookieExport, deleteHostedData, isPublishWorkspace, mediaPlanOf, planOf, publicGate, reportRoute, sb, withReportFooter, type CloudEnv, type CloudHost } from "./hosted-cloud";
 import { queueWebhooks, routeHints, watchWrites, webhookApi, webhookTick, type Actor, type WebhookEnv } from "./webhooks";
 
 const VERSION = "1.0.0";
@@ -53,13 +56,24 @@ type Env = CoreEnv & TenancyEnv & AccountEnv & BetaEnv & {
   readonly MEDIA_R2?: R2Like;
   readonly MEDIA_MIGRATE_SECRET?: string;
   readonly TEMPLATE_MIGRATE_SECRET?: string;
+  readonly CONSENT_PURGE?: string;
 };
 
 type GrantProps = { readonly agent: string };
 type Principal = AgentPrincipal & { readonly key: string; readonly env: Env; readonly ws: string; readonly tokenId?: string; readonly agentRules?: boolean };
 
+// A member workspace id is its account's user id without dashes (tenancy.workspaceIdFor), so the media quota of
+// whoever writes there (the member, an agent token, an invited editor) is the owning account's. Looked up only when an
+// upload or the settings usage asks (gate/_worker.js mediaPlan), never on a page read.
+const userOfWorkspace = (ws: string) => ws.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
+function memberEnv(env: Env, ws: string): Env {
+  const base = workspaceEnv(env, ws);
+  if (ws === OWNER_WS || !env.SUPABASE_SERVICE_ROLE_KEY) return base;
+  return { ...base, ACARD_MEDIA_PLAN: () => mediaPlanOf(env as unknown as CloudEnv, userOfWorkspace(ws)) } as Env;
+}
+
 function scoped(env: Env, ws: string): Env {
-  return acardHost.trust(workspaceEnv(env, ws));
+  return acardHost.trust(memberEnv(env, ws));
 }
 
 // acard-next-10 #4: during the closed beta an account without an invite code may connect the local app, so its OAuth
@@ -87,7 +101,7 @@ function guestEnv(env: Env, request: Request): Env | null {
   if (!match) return null;
   const ws = match[1] === "o" ? OWNER_WS : match[1];
   if (ws !== OWNER_WS && !env.WORKSPACE) return null;
-  const base = workspaceEnv(env, ws);
+  const base = memberEnv(env, ws);
   return acardHost.trust({ ...base, ASSETS: memberAssets(env.ASSETS), ACARD_GUEST_TOKEN: match[2] } as Env);
 }
 const SHARE_PATH = /^\/s\/(o|[0-9a-f]{32})(\/.*)$/;
@@ -296,7 +310,7 @@ async function humanLookup(request: Request, env: Env): Promise<Human | null> {
     if (ws !== OWNER_WS && !env.WORKSPACE) return null;
     env.ACARD_IDENTITY?.(session.user.sub + ":" + ws);
     const email = typeof session.user.email === "string" ? session.user.email.toLowerCase() : "";
-    return { ws, env: acardHost.trust({ ...workspaceEnv(env, ws), ...(email ? { ACARD_USER_EMAIL: email } : {}) } as Env), set: session.set, session };
+    return { ws, env: acardHost.trust({ ...memberEnv(env, ws), ...(email ? { ACARD_USER_EMAIL: email } : {}) } as Env), set: session.set, session };
   }
   return null;
 }
@@ -593,7 +607,9 @@ async function revokeAllGrants(env: Env, origin: string, userId: string): Promis
   return removed;
 }
 
-const TRANSLATED_SITE = new Set(["index", "login", "signup", "forgot", "reset", "beta", "onboarding", "download"]);
+const TRANSLATED_SITE = new Set(["index", "login", "signup", "forgot", "reset", "beta", "onboarding", "download", "desktop-wait", "desktop-start", "desktop-tour"]);
+// Pages that carry the landing's top bar (build.ts, gate/site-nav-html.ts) and get its session / beta steps.
+const SITE_NAV_PAGES = new Set(["download"]);
 const LEGAL = new Set(["terms", "privacy"]);
 
 async function sitePage(request: Request, env: Env, name: string, extra: string[] = [], lang: Lang = pickLang(request), session: Session | null = null): Promise<Response> {
@@ -602,7 +618,9 @@ async function sitePage(request: Request, env: Env, name: string, extra: string[
   if (!asset.ok) return new Response("화면을 찾지 못했어요.", { status: 500 });
   const res = new Response(asset.body, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", vary: "Cookie" } });
   const links = name === "index" ? rewriteLandingLinks(res) : res;
-  const page = name === "index" ? rewriteLanding(session ? rewriteMyHome(links, session) : links, env) : res;
+  const page = name === "index" ? rewriteLanding(session ? rewriteMyHome(links, session) : links, env)
+    : SITE_NAV_PAGES.has(name) ? (!session && webInternal(env) ? rewriteNavInternal(res) : rewriteSiteNav(res, session, betaClosed(env)))
+    : (name === "signup" || name === "beta") && webInternal(env) ? rewriteAuthInternal(res) : res;
   const translated = TRANSLATED_SITE.has(name) ? translateHtml(page, lang) : LEGAL.has(name) ? page : injectAppLang(page, lang);
   return withCookies(translated, extra);
 }
@@ -621,6 +639,21 @@ export function humanEditFlagCheck(env: Env, request: Request, human: Human): Pr
 export function withHumanEditFlag(res: Response, on: boolean): Response {
   if (!on || !(res.headers.get("content-type") ?? "").includes("text/html")) return res;
   return new HTMLRewriter().on("html", { element(el) { el.setAttribute("data-human-edit", "on"); } }).transform(res);
+}
+// Core editing (acard-core-editing): caret split/merge, block selection and commands, structured paste. CORE_EDITING "on" =
+// everyone, "flagged" = accounts whose admin console flags have coreEditing on, anything else = nobody (old Enter, paste
+// and selection). html[data-core-editing=on] turns it on in the editor; ?core-editing=on still works for local QA.
+export function coreEditingFlagCheck(env: Env, request: Request, human: Human): Promise<boolean> | null {
+  const mode = (env as unknown as { CORE_EDITING?: string }).CORE_EDITING;
+  if (mode !== "on" && mode !== "flagged") return null;
+  if (!human.session || request.method !== "GET" || !new URL(request.url).pathname.startsWith("/edit")) return null;
+  if (mode === "on") return Promise.resolve(true);
+  return sb(env as unknown as Parameters<typeof sb>[0], `/user_roles?user_id=eq.${encodeURIComponent(human.session.user.sub)}&select=flags`)
+    .then((rows) => Array.isArray(rows) && rows[0]?.flags?.coreEditing === true).catch(() => false);
+}
+export function withCoreEditingFlag(res: Response, on: boolean): Response {
+  if (!on || !(res.headers.get("content-type") ?? "").includes("text/html")) return res;
+  return new HTMLRewriter().on("html", { element(el) { el.setAttribute("data-core-editing", "on"); } }).transform(res);
 }
 
 async function settingsPage(request: Request, env: Env): Promise<Response> {
@@ -663,6 +696,7 @@ async function routeLoggedIn(request: Request, env: Env, url: URL, ctx: unknown,
     return await sitePage(request, env, path.startsWith("/onboarding") ? "onboarding" : "settings", human.set, human.session ? pickUserLang(request) : pickLang(request));
   }
   if (path.replace(/\/$/, "") === "/reset") return sitePage(request, env, "reset", human.set);
+  if (path.replace(/\/$/, "") === "/login" && ["/api/auth/desktop/handoff", "/desktop/start"].includes(url.searchParams.get("next") ?? "")) return withCookies(redirect(url.searchParams.get("next")!), human.set);
   if (PUBLIC_SITE[path.replace(/\/$/, "")]) return withCookies(redirect("/"), human.set);
   if (human.session && (path === "/home" || path === HOME_PATH) && request.method === "GET") {
     // An onboarded profile never goes back to needing onboarding, and its lang only matters while the acard_lang cookie is
@@ -670,6 +704,11 @@ async function routeLoggedIn(request: Request, env: Env, url: URL, ctx: unknown,
     const hasLangCookie = /(?:^|;\s*)acard_lang=/.test(request.headers.get("cookie") ?? "");
     const remembered = hasLangCookie && (await authTimed(env, async () => env.OUTBOX?.get(onboardedKey(human.session!.user.sub)).catch(() => null)));
     if (!remembered) {
+      // The waitlist free pass (gate/cloud.ts claimCompPass) is checked off the response path; it remembers its answer.
+      if (human.ws !== OWNER_WS && env.SUPABASE_SERVICE_ROLE_KEY) {
+        const claim = claimCompPass(env as unknown as CloudEnv, human.session.user.sub).catch((error) => console.error("acard comp pass claim failed", String(error)));
+        (env as Env & { ACARD_WAIT?: (p: Promise<unknown>) => void }).ACARD_WAIT?.(claim);
+      }
       const profile = await authTimed(env, () => loadProfile(env, human.session!).catch(() => undefined));
       if (profile === null || (profile && !profile.onboarded_at)) return withCookies(redirect("/onboarding"), human.set);
       if (profile && isLang(profile.lang) && !hasLangCookie) {
@@ -678,8 +717,17 @@ async function routeLoggedIn(request: Request, env: Env, url: URL, ctx: unknown,
       if (profile?.onboarded_at) await env.OUTBOX?.put(onboardedKey(human.session.user.sub), "1", { expirationTtl: 60 * 60 * 24 }).catch(() => undefined);
     }
   }
+  const coreEditing = coreEditingFlagCheck(env, request, human);
+  // The beta notice and badge go into the page HTML (no shift after load); looked up beside the page read, top-level
+  // HTML pages, also when the offline worker forwards the navigation (its fetch is sec-fetch-dest: empty, live 5f4b1a06) and
+  // the reader's in-place navigation (its <main> swap keeps the notice); never in a frame or on /p/, /admin/.
+  const dest = request.headers.get("sec-fetch-dest");
+  const betaWanted = human.session && request.method === "GET" && !/^(?:iframe|frame|embed|object)$/.test(dest ?? "") && !/^\/(?:api|p|admin|media)\//.test(path) && (request.headers.get("accept") ?? "").includes("text/html");
   const humanEdit = humanEditFlagCheck(env, request, human);
-  const [coreResponse, editOn] = await Promise.all([core.fetch(request, human.env, ctx), humanEdit ?? false]);
+  const page = core.fetch(request, human.env, ctx);
+  const betaStart = Date.now();
+  const betaChrome = betaWanted ? betaChromeFor(env, human.session!.user.sub, page).then((c) => ({ c, ms: Date.now() - betaStart })) : null;
+  const [coreResponse, editOn] = await Promise.all([page, humanEdit ?? false]);
   const response = withHumanEditFlag(withEarlyHints(coreResponse, path), editOn);
   // A one-word address that is no page of this workspace may be someone's notes.example.com/<handle>. Asked only after the 404,
   // so a page read never waits on it; the own handle opens the own home, another one shows a notice with no content.
@@ -689,7 +737,11 @@ async function routeLoggedIn(request: Request, env: Env, url: URL, ctx: unknown,
     if (owner === human.session!.user.sub) return withCookies(redirect(HOME_PATH), human.set);
     if (owner) return withCookies(handleNoticePage(handle, pickUserLang(request), true), human.set);
   }
-  return withCookies(injectAppLang(human.session ? injectAppBeta(response, env) : response, human.session ? pickUserLang(request) : pickLang(request)), human.set);
+  const flagged = withCoreEditingFlag(response, coreEditing ? await coreEditing : false);
+  const beta = betaChrome ? await betaChrome : null;
+  const withBeta = human.session ? injectAppBeta(flagged, env, beta?.c ?? null) : flagged;
+  if (beta && withBeta !== flagged) withBeta.headers.append("server-timing", `beta;dur=${beta.ms};desc="${beta.c ? (beta.c.notice ? "notice" : beta.c.badge ? "badge" : "none") : "late"}"`);
+  return withCookies(injectAppLang(withBeta, human.session ? pickUserLang(request) : pickLang(request)), human.set);
 }
 
 async function agentTick(request: Request, env: Env): Promise<Response> {
@@ -821,14 +873,24 @@ const entry = {
       if (path === "/webhooks.md") return textResponse(webhooksMd(origin), "text/markdown");
       if (path === "/acard-cli.tgz") return env.ASSETS.fetch(request);
       if (path === "/robots.txt") return seoResponse(robotsTxt(), "text/plain");
+      if (path === "/api/github/stars") return githubStarsResponse((caches as unknown as { default: Parameters<typeof githubStarsResponse>[0] }).default);
       if (path === "/sitemap.xml") return seoResponse(sitemapXml(), "application/xml");
       if (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") return protectedResourceMetadata(origin, origin + "/mcp");
       if (path === "/.well-known/oauth-protected-resource/api/v1") return protectedResourceMetadata(origin, origin + "/api/v1");
       if (path.startsWith("/_site/") || path.startsWith("/fonts/") || /^\/i18n\/app-(?:en|zh)\.json$/.test(path)) return env.ASSETS.fetch(request);
       if (/^\/(?:wordmark(?:-symbol|-mono)?|logo(?:-small|-16|-square|-square-dark)?|favicon|icon-maskable)\.svg$/.test(path) || /^\/(?:logo-square(?:-dark)?|og|og-square|wordmark|apple-touch-icon|favicon-(?:16|32)|icon-(?:180|192|512)|icon-maskable-(?:192|512))\.png$/.test(path) || path === "/favicon.ico") return env.ASSETS.fetch(request);
       if (path === "/gallery" || path === "/gallery/") return env.ASSETS.fetch(new Request(origin + "/gallery.html"));
+      // The landing's bar shows 내 홈으로 for a signed-in visitor, so these pages read the session like "/" does (one JWT check).
+      if (/^\/download\/?$/.test(path)) {
+        const name = path.replace(/\//g, "");
+        const human = await humanFor(request, env);
+        const lang = human?.session ? pickUserLang(request) : pickLang(request);
+        const page = await sitePage(request, env, name, human?.set ?? [], lang, human?.session ?? null);
+        if (name === "download") return withReleaseInfo(page);
+        return page;
+      }
       if (path === "/gallery.css") return env.ASSETS.fetch(request);
-      if (path === "/download" || path === "/download/") return withReleaseInfo(await sitePage(request, env, "download"));
+      if (path === "/desktop/wait" || path === "/desktop/wait/") return sitePage(request, env, "desktop-wait");
     }
     if (path.startsWith("/download/") || path.startsWith("/releases/")) {
       const release = await releaseRoute(request, path);
@@ -887,7 +949,7 @@ const entry = {
 
     if (ACCOUNT_API.test(path)) {
       await humanFor(request, env);
-      return localizeJson(await accountApi(request, env, url, (userId) => revokeAllGrants(env, origin, userId)), pickLang(request));
+      return localizeJson(await accountApi(request, env, url, (userId) => revokeAllGrants(env, origin, userId), (userId, email) => deleteHostedData(env as unknown as Parameters<typeof deleteHostedData>[0], userId, email)), pickLang(request));
     }
 
     const memberShare = MEMBER_SHARE.exec(path);
@@ -898,8 +960,15 @@ const entry = {
         const stopped = await publicGate(env as unknown as CloudEnv, memberShare[1]);
         if (stopped) return stopped;
       }
-      const inner = new Request(origin + "/p" + memberShare[2], { method: request.method, headers: request.headers });
-      const page = await core.fetch(inner, scoped(env, memberShare[1]), ctx);
+      // The query carries a shared file's signed address (?k=, issue 165); nothing else on a share route reads it.
+      const inner = new Request(origin + "/p" + memberShare[2] + url.search, { method: request.method, headers: request.headers });
+      let page: Response;
+      try { page = await core.fetch(inner, scoped(env, memberShare[1]), ctx); }
+      catch (error) {
+        // A deleted account's store is empty (no tables): its old links are simply gone.
+        if (/no such table/i.test(String((error as Error)?.message))) return new Response("없는 페이지예요.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
+        throw error;
+      }
       return published ? withReportFooter(page, origin + path) : page;
     }
     if (path === "/cloud/report") return reportRoute(request, env as unknown as CloudEnv, url);
@@ -933,16 +1002,27 @@ const entry = {
       const body = (await request.json().catch(() => ({}))) as { cron?: unknown };
       return jsonResponse(await webhookTick(env as unknown as WebhookEnv, { cron: body.cron === true }));
     }
+    // #170: the acard-workspace cron asks every 15 minutes; gate/consent.ts purgeConsents runs once per UTC day.
+    if (path === "/__consent/purge" && request.method === "POST") {
+      if (!env.RECURRING_TICK_SECRET || !sameSecret(request.headers.get("x-recurring-tick") ?? "", env.RECURRING_TICK_SECRET)) return jsonResponse({ error: "not found" }, 404);
+      if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return jsonResponse({ error: "not configured" }, 503);
+      return jsonResponse(await purgeConsents(env));
+    }
     if (path === "/__media/migrate" && request.method === "POST") return mediaMigrate(request, env);
     if (path === "/__media/orphans" && request.method === "POST") return mediaOrphans(request, env);
     if (path === "/__templates/migrate" && request.method === "POST") return templateMigrate(request, env);
 
     const human = await humanFor(request, env);
+    if (request.method === "GET" && /^\/desktop\/(start|tour)\/?$/.test(path)) {
+      if (!human?.session) return redirect("/login?next=" + encodeURIComponent(path.replace(/\/$/, "")));
+      return sitePage(request, env, path.includes("/start") ? "desktop-start" : "desktop-tour", human.set, pickUserLang(request));
+    }
     if (ADMIN_PATH.test(path)) {
       const response = await adminRoute(request, env as unknown as AdminEnv, url, human?.session ?? null, {
         revokeGrants: (userId) => revokeAllGrants(env, origin, oauthUserId(workspaceIdFor(userId, env))),
         cloud: (api, actor) => cloudAdmin(request, env as unknown as CloudEnv, cloudHost(env, ctx), api, actor, origin),
         storageAlertTest: () => acardHost.storageAlertTest(env),
+        storageUsage: () => acardHost.storageUsage(env),
         revokeTokens: async (ws) => {
           const admin = await acardHost.tokenAdmin(scoped(env, ws));
           let n = 0;
@@ -958,6 +1038,7 @@ const entry = {
     }
     if (path === "/api/cloud/plan" && request.method === "GET") {
       if (!human?.session || human.ws === OWNER_WS) return jsonResponse({ error: "로그인이 필요해요." }, 401);
+      await claimCompPass(env as unknown as CloudEnv, human.session.user.sub).catch((error) => console.error("acard comp pass claim failed", String(error)));
       return withCookies(await planOf(env as unknown as CloudEnv, human.session.user.sub), human.set);
     }
     if (path === "/api/me/ai-usage" && request.method === "GET") {
@@ -967,7 +1048,9 @@ const entry = {
     if (BETA_API.test(path)) return withCookies(await localizeJson(await betaApi(request, env, url, human?.session ?? null), human?.session ? pickUserLang(request) : pickLang(request)), human?.set ?? []);
     const bare = path.replace(/\/$/, "");
     if (bare === "/beta") {
-      if (human?.session && (!betaClosed(env) || (await hasBetaAccess(env, human.session)))) return withCookies(redirect(HOME_PATH), human.set);
+      // Open or closed, a signed-in account without beta access may still enter an invite code here (it moves the account
+      // to the beta tier, gate/cloud.ts MEDIA_TIERS); only accounts that already have beta access go home.
+      if (human?.session && (await webEntryAllowed(env, human.session))) return withCookies(redirect(HOME_PATH), human.set);
       return sitePage(request, env, "beta", human?.set ?? []);
     }
     if (bare === "/admin/beta") {
@@ -975,10 +1058,10 @@ const entry = {
       if (!(await isBetaAdmin(env, human.session))) return new Response("관리자만 볼 수 있어요.", { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
       return sitePage(request, env, "admin-beta", human.set);
     }
-    if (human?.session && betaClosed(env) && !PUBLIC_SITE[bare] && path !== "/" && path !== "/index.html" && path !== "/__logout" && path !== "/sw.js" && !/^\/[\w.-]+\.(?:css|js|svg|png|ico|webmanifest)$/.test(path) && !(await authTimed(env, () => hasBetaAccess(env, human.session!)))) {
+    if (human?.session && betaClosed(env) && !PUBLIC_SITE[bare] && path !== "/" && path !== "/index.html" && path !== "/__logout" && path !== "/sw.js" && !/^\/[\w.-]+\.(?:css|js|svg|png|ico|webmanifest)$/.test(path) && !(await authTimed(env, () => webEntryAllowed(env, human.session!)))) {
       const html = request.method === "GET" && (request.headers.get("accept") ?? "").includes("text/html");
       if (html) return withCookies(redirect("/beta"), human.set);
-      return withCookies(await localizeJson(jsonResponse({ error: "beta_required", message: "초대 코드를 넣어 주세요." }, 403), pickUserLang(request)), human.set);
+      return withCookies(await localizeJson(jsonResponse({ error: "beta_required", message: webInternal(env) ? WEB_INTERNAL_MSG : "초대 코드를 넣어 주세요." }, 403), pickUserLang(request)), human.set);
     }
     // The old /connect page is merged into 설정 > 에이전트 연결 (owner pick, 2026-10-20); old links land there.
     if (path === "/connect" || path === "/connect/") return new Response(null, { status: 301, headers: { location: "/settings/agents/" + url.search, "cache-control": "no-store" } });
@@ -1017,7 +1100,7 @@ const entry = {
         return liveConnect(env.LIVE, ws, request, pages.map((p) => String(p.slug)));
       }
       if (!human) return jsonResponse({ error: "로그인이 필요해요." }, 401);
-      if (betaClosed(env) && human.session && !(await hasBetaAccess(env, human.session))) return jsonResponse({ error: "beta_required" }, 403);
+      if (betaClosed(env) && human.session && !(await webEntryAllowed(env, human.session))) return jsonResponse({ error: "beta_required" }, 403);
       return liveConnect(env.LIVE, human.ws, request, null);
     }
     if (guest) {
@@ -1074,7 +1157,7 @@ async function identityResponse(response: Response, value: string | null, guest 
 async function fetchResponse(incoming: Request, raw: Env, ctx: unknown): Promise<Response> {
     const off = serviceWorkerOff(incoming);
     if (off) return off;
-    const backend = withDataBackend(withR2Media(raw) as Env & DataEnv);
+    const backend = withDataBackend(withR2Media(withMediaBucket(raw as Env & BucketEnv)) as Env & DataEnv);
     const keep = (ctx as { waitUntil?(p: Promise<unknown>): void } | undefined)?.waitUntil?.bind(ctx);
     let response: Response | null = null;
     const started = Date.now();
@@ -1145,7 +1228,8 @@ export default {
     let response: Response;
     try { response = await fetchResponse(incoming, raw, ctx); }
     catch (error) {
-      console.error("acard request failed", (raw as Env & DataEnv).DATA_BACKEND ?? "d1", error instanceof Error ? error.stack ?? error.message : String(error));
+      // issue 165: no e-mail address leaves in a log line (a database error can quote the row it refused).
+      console.error("acard request failed", (raw as Env & DataEnv).DATA_BACKEND ?? "d1", (error instanceof Error ? error.stack ?? error.message : String(error)).replace(/[^\s@<>"'(),;:]+@[^\s@<>"'(),;:]+\.[A-Za-z]{2,}/g, "<email>"));
       const path = new URL(incoming.url).pathname;
       if (isDbTransient(error)) response = busyResponse(incoming);
       else if (path.startsWith("/api/") || /^\/(?:mcp|sse)(?:\/|$)/.test(path)) response = jsonResponse({ error: "internal_error" }, 500);

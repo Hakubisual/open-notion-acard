@@ -17,7 +17,7 @@
   };
   var SLASH_EN = {
     paragraph: "text paragraph plain body", heading1: "heading title h1 large", heading2: "heading subtitle h2", heading3: "heading h3 small", heading4: "heading h4 smallest",
-    bulleted: "bullet list unordered", numbered: "numbered ordered list", to_do: "todo checkbox task check", toggle: "toggle collapse details fold",
+    bulleted: "bullet list unordered", numbered: "numbered ordered list", to_do: "todo to-do checkbox task check", toggle: "toggle collapse details fold",
     toggle_heading1: "toggle heading collapse h1", toggle_heading2: "toggle heading collapse h2", toggle_heading3: "toggle heading collapse h3",
     callout: "callout note box info tip", quote: "quote blockquote citation", code: "code snippet program", diagram: "diagram flowchart mermaid mindmap",
     chart: "chart graph bar line pie", visual: "visual animation svg", html: "html web demo custom", divider: "divider line separator hr",
@@ -56,13 +56,15 @@
   function slashDesc(entry) { return entry.desc || SLASH_DESC[entry.type] || entry.hint || ""; }
   function slashGroupOf(entry) { var t = entry.type; return /^part:/.test(t) ? (entry.mine ? "mine" : "part") : /^component:/.test(t) ? "component" : SLASH_MEDIA[t] ? "media" : SLASH_ADVANCED[t] ? "advanced" : "basic"; }
   // -1 = no match; higher = better. Tiers are 20+ apart so personal use (slashBoost, max 18) only breaks ties.
+  // The label on screen may be the English/Chinese one from i18n-app.js (window.AcardLang); both count as the label.
+  function slashShown(label) { var lang = typeof window !== "undefined" && window.AcardLang; return lang ? String(lang.text(label)) : label; }
   function slashScore(entry, query) {
     var raw = slashFlat(query);
     if (!raw) return 0;
-    var q = slashJamo(raw), label = slashJamo(slashFlat(entry.label));
-    if (label === q) return 300;
-    if (label.indexOf(q) === 0) return 200;
-    if (label.indexOf(q) > 0) return 150;
+    var q = slashJamo(raw), labels = [entry.label, slashShown(entry.label)].map(function (l) { return slashJamo(slashFlat(l)); });
+    if (labels.some(function (l) { return l === q; })) return 300;
+    if (labels.some(function (l) { return l.indexOf(q) === 0; })) return 200;
+    if (labels.some(function (l) { return l.indexOf(q) > 0; })) return 150;
     var text = [entry.hint, SLASH_ALIASES[entry.type], entry.aliases, SLASH_EN[entry.type], entry.type, slashDesc(entry)].join(" ").toLowerCase();
     var words = text.split(/\s+/).filter(Boolean);
     if (/^[\u3131-\u314e]+$/.test(raw)) {

@@ -15,6 +15,8 @@ function notionExportBlock(block: Block): string[] {
   const meta = block.meta || {};
   const text = block.text || "";
   switch (block.type) {
+    case "synced":
+      return ["Synced content unavailable", ""];
     case "heading1":
       return ["# " + text, ""];
     case "heading2":
@@ -103,7 +105,7 @@ export function pageToHtml(page: { title: string; blocks: Block[] }): string {
     '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     "<title>" + title + "</title>\n<style>\n" + NOTION_EXPORT_CSS + "\n</style>\n</head>\n<body>\n" +
-    "<article>\n<h1>" + title + "</h1>\n" + renderBlocks(page.blocks) + "\n</article>\n</body>\n</html>\n"
+    "<article>\n<h1>" + title + "</h1>\n" + renderBlocks(page.blocks, { page: { readOnly: true } }) + "\n</article>\n</body>\n</html>\n"
   );
 }
 

@@ -8,6 +8,7 @@
   const DONE_STEPS = ["page", "slash", "search", "share"];
   const MARKED = ["slash", "search", "share"];
   const ACTIONS = ["step", "skip", "resume", "hide", "restart", "celebrated"];
+  const EDIT_TOOLS_TIP = "블록 위에서 오른쪽 클릭(휴대폰은 블록 핸들 길게 누르기) = 블록 도구, 글을 드래그하고 오른쪽 클릭 = 그 부분만 바꾸는 도구, 빈 줄에서 Tab = 기능 찾기(도표·차트·타임라인을 검색하거나 문장으로 AI에게 맡기기)";
 
   async function readState(db) {
     const row = await db.prepare("SELECT value FROM feature_templates_state WHERE key = ?").bind(KEY).first();
@@ -49,6 +50,10 @@
     return {
       enabled, active: !state.hiddenAt, started: state.startedAt, steps, count, required: DONE_STEPS.length, done,
       skipped: Boolean(state.skippedAt) && !done, hidden: Boolean(state.hiddenAt), celebrate: done && !state.celebratedAt,
+      // issue 149: the finish cards name the right-click tools and the Tab palette only where they exist (HUMAN_EDIT "on";
+      // "flagged" is per account in the gate, which this workspace API cannot see, so it stays quiet there). The line
+      // lives here, not in home.js / welcome-guide.js, so the client total stays under its cap.
+      editTools: env.HUMAN_EDIT === "on" ? EDIT_TOOLS_TIP : null,
     };
   }
 

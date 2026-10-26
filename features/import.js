@@ -242,7 +242,7 @@
       if (parsed.kind === "asset") return mediaUrls[parsed.key] || "";
       return page(parsed.key, parsed.heading) || "";
     };
-    const out = (Array.isArray(blocks) ? blocks : []).map((block) => {
+    const out = importSyncedBlocks(Array.isArray(blocks) ? blocks : []).map((block) => {
       const next = { ...block, meta: block.meta && typeof block.meta === "object" ? { ...block.meta } : block.meta };
       if (next.meta) {
         for (const field of ["src", "url"]) if (typeof next.meta[field] === "string") next.meta[field] = swap(next.meta[field]);

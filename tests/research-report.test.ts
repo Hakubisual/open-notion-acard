@@ -128,6 +128,17 @@ test("evidence labels reach the print page and the shared link (head style, sinc
   expect(shared.slice(0, shared.indexOf("</head>"))).toContain(EVIDENCE_CSS);
 });
 
+test("footnote references survive the shared link: the superscript links, the note's back link and the head style", async () => {
+  const notes = { id: "n", type: "component", text: JSON.stringify({ notes: [{ id: "1", text: "설문은 단새" }] }), meta: { ui: "block-footnotes" } };
+  expect((await h.call("POST", "/api/pages", { title: "F", slug: "fn" })).status).toBe(200);
+  expect((await h.call("PUT", "/api/page/fn", { title: "F", blocks: [{ id: "p", type: "paragraph", text: "61%였다.[^1]" }, notes] })).status).toBe(200);
+  const link = (await h.call("POST", "/api/page/fn/share")).data as { url: string };
+  const shared = await (await h.worker.fetch(new Request("https://notes.test" + link.url), h.env)).text();
+  expect(shared).toContain('61%였다.<sup class="fnref"><a href="#fn-1" id="fnref-1">1</a></sup>');
+  expect(shared).toContain('<a class="blt-back" href="#fnref-1"');
+  expect(shared.slice(0, shared.indexOf("</head>"))).toContain(".fnref{");
+});
+
 test("function names like \\ln draw as upright text, not as an unknown command", async () => {
   const { equationHtml } = await import("../equation-html.js");
   const html = equationHtml("t = \\frac{1}{k} \\ln x + \\sin y");

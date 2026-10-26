@@ -16,55 +16,152 @@
 <meta property="og:locale" content="en_US"><meta property="og:locale:alternate" content="ko_KR"><meta property="og:locale:alternate" content="zh_CN">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Privacy Policy - Acard"><meta name="twitter:description" content="How Acard collects, uses and protects your personal information."><meta name="twitter:image" content="https://notes.example.com/og.png"><meta name="twitter:image:alt" content="Acard - AI writes. People read with ease.">
 
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
-<style>
-.legal { max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; color: var(--ink-2); }
-.legal h1 { font-size: var(--fs-32,32px); margin: 24px 0 8px; color: var(--ink); }
-.legal h2 { font-size: var(--fs-19,19px); margin: 32px 0 8px; color: var(--ink); }
-.legal .updated { color: var(--faint); font-size: var(--fs-14,14px); }
-.legal hr { border: 0; border-top: 1px solid var(--line); margin: 56px 0; }
-.legal a { color: var(--accent); }
-.legal .brand { display: inline-flex; gap: 8px; align-items: center; font-weight: 700; color: var(--ink); }
-.legal .brand img { width: 24px; height: 24px; }
-</style>
+<link rel="stylesheet" href="/_site/legal.css">
 </head>
 <body>
 <main class="legal">
 <a class="brand" href="/"><svg class="wordmark" viewBox="0 0 375.59 100" role="img" aria-label="Acard" focusable="false"><use href="/wordmark-symbol.svg#w"/></svg></a>
-<h1>Privacy Policy</h1>
+<h1>Acard Privacy Policy</h1>
 <p class="translation-note">This is an English translation for convenience. If it differs from the Korean original, the Korean version (<a href="/privacy?lang=ko">한국어 원문</a>) prevails.</p>
-<p class="updated">Effective date: October 16, 2026</p>
-<p>Acard (the "Service") processes only the minimum information necessary to create and maintain an account.</p>
-<h2>1. Information We Process</h2>
-<p>Email address, password (stored only in encrypted form), the name, email, and profile picture provided by Google when you sign in with Google, sign-in records, and content you create yourself while using the Service.</p>
-<h2>1-1. Beta Waitlist and Feedback</h2>
-<p>The email address and optional information you provide when joining the beta waitlist (the AI tools you use, what you want to use the Service for, your Discord ID, and how you heard about us) are used only to manage your place in line and to send you an invitation. For reports sent with the "Feedback" button at the bottom right of the app, we store the content, any screenshots you attach, the environment details you leave switched on (page address, browser and OS, screen size, app version, time) and your account email. The text on your page is never sent. Reports move to the team's private work list with an internal number only, without your email, and only the operations team is notified through an internal messenger. They are not posted to Discord. To verify beta operations, we record usage events such as signing up, opening your first page, and redeeming an invite code only once per account, without using external analytics tools. If you request deletion of your waitlist information at <a href="mailto:hello@notes.example.com">hello@notes.example.com</a>, we will delete it within 7 days.</p>
-<h2>2. Purpose of Use</h2>
-<p>Member identification and sign-in, account security, and communications necessary for operating the Service, such as password resets. We do not use your information for advertising or sell it to third parties.</p>
-<h2>3. Retention and Outsourcing</h2>
-<p>Account information is stored with Supabase (authentication and database) and Cloudflare (hosting). When you delete your account, your account information is deleted without delay.</p>
-<h2>4. Your Rights</h2>
-<p>You may delete your account at any time from the account screen, and you may request access to, correction of, or deletion of your information.</p>
-<h2>5. Contact</h2>
-<p><a href="mailto:hello@notes.example.com">hello@notes.example.com</a></p>
-<hr>
-<div lang="en">
-<h1>Privacy Policy</h1>
-<p class="updated">Effective: October 16, 2026</p>
-<p>Acard ("the Service") processes only the minimum information needed to create and keep your account.</p>
-<h2>1. Information we process</h2>
-<p>Email address, password (stored only in hashed form), the name, email and profile picture Google provides when you sign in with Google, sign-in records, and content you create in the Service.</p>
-<h2>1-1. Beta waitlist and feedback</h2>
-<p>The email and optional answers (AI tool, intended use, Discord handle, referral source) you give when joining the beta waitlist are used only to manage your place and send your invite. Feedback sent from the app is stored with your account email and sent to staff through an internal messenger; it is not posted to Discord. To check that the beta works we record a few usage events (sign-up, first page, invite redeemed) once per account, without third-party analytics. Email hello@notes.example.com to delete your waitlist entry; we delete it within 7 days.</p>
-<h2>2. Purpose</h2>
-<p>Identifying you and signing you in, account security, and service messages such as password resets. We do not use your data for advertising or sell it to third parties.</p>
-<h2>3. Storage and processors</h2>
-<p>Account data is stored with Supabase (authentication and database) and Cloudflare (hosting). When you delete your account, your account data is deleted without delay.</p>
-<h2>4. Your rights</h2>
-<p>You can delete your account at any time and request access to, correction of, or deletion of your data.</p>
-<h2>5. Contact</h2>
-<p><a href="mailto:hello@notes.example.com">hello@notes.example.com</a></p>
+<p class="updated">Effective date: October 24, 2026 · This policy may be revised after expert review during the beta; we will announce any change as described in section 12.</p>
+<p>Acard ("Acard", "we") publishes this policy under Article 30 of the Korean Personal Information Protection Act (PIPA) to explain how we process and protect your personal information and to handle related complaints quickly. It covers the Acard local app (the desktop app and the open-source open-notion-acard), the public site notes.example.com, the waitlist and the web app (Acard Cloud).</p>
+<div class="lead">
+<p><b>The short version</b></p>
+<ul>
+<li><b>Your notes and files in the local app stay on your PC.</b> We do not receive them and cannot see them.</li>
+<li>The only thing the local app sends out by default is <b>one update check</b>. No usage statistics, crash reports or telemetry.</li>
+<li>The personal information we receive is mainly the <b>email address you give when joining the waitlist</b>.</li>
+<li>The web app (Acard Cloud) is currently <b>for internal testing only</b> and does not accept outside sign-ups.</li>
+</ul>
 </div>
+<h2 id="toc">Contents</h2>
+<ol class="toc">
+<li><a href="#p1">Information we process, purposes, legal basis and retention</a></li>
+<li><a href="#p2">What the local app sends and receives</a></li>
+<li><a href="#p3">Children under 14</a></li>
+<li><a href="#p4">Destruction</a></li>
+<li><a href="#p5">Provision to third parties</a></li>
+<li><a href="#p6">Processors</a></li>
+<li><a href="#p7">Transfers abroad</a></li>
+<li><a href="#p8">Security measures</a></li>
+<li><a href="#p9">Cookies and browser storage</a></li>
+<li><a href="#p10">Your rights and how to use them</a></li>
+<li><a href="#p11">Privacy officer and where to get help</a></li>
+<li><a href="#p12">Changes and history</a></li>
+</ol>
+
+<h2 id="p1">1. Information we process, purposes, legal basis and retention</h2>
+<p>We process only the minimum needed for the purposes below. If a purpose changes we take the steps PIPA Article 18 requires, such as asking for consent again. We do not process sensitive information, unique identification numbers or pseudonymized information.</p>
+<h3>(1) Processed with your consent</h3>
+<div class="tbl"><table>
+<tr><th>Purpose</th><th>Items</th><th>Retention</th></tr>
+<tr><td>Waitlist sign-up, your place in line, invitations and launch news</td><td>[Required] email<br>[Optional] AI tools you use, what you want to use Acard for, Discord username, how you found us (the source tag of the link)</td><td>Until you cancel. If you do not, deleted one year after the official launch</td></tr>
+<tr><td>Record of the required consents</td><td>Email, the items agreed to, the document version (effective date), time of consent</td><td>One year after the waitlist entry or account is deleted (to prove consent)</td></tr>
+<tr><td>Account sign-up (web app, currently internal testing only)</td><td>Email, password (stored only as a hash), name, email and profile picture provided by Google when you sign in with Google, sign-in records, notes and files you create, public handle, AI feature usage records</td><td>Until you delete the account</td></tr>
+</table></div>
+<p>You may refuse consent. Without the required items you cannot join the waitlist or sign up. Leaving the optional questions unanswered has no effect on your sign-up.</p>
+<h3>(2) Processed without consent</h3>
+<div class="tbl"><table>
+<tr><th>Purpose</th><th>Legal basis</th><th>Items</th><th>Retention</th></tr>
+<tr><td>Running the site and update server, blocking abuse</td><td>PIPA Art. 15(1)6 (legitimate interest)</td><td>IP address, requested URL, time, browser/app version and OS</td><td>We do not keep separate access logs. To block too many requests in a short time we count requests per IP in server memory; the count disappears within one day.</td></tr>
+<tr><td>Answering inquiries and requests</td><td>Art. 15(1)4 (steps taken at your request)</td><td>Email, content of the inquiry</td><td>One year after the matter is closed</td></tr>
+<tr><td>Web app feedback (internal test accounts)</td><td>Art. 15(1)4</td><td>Report content, screenshots you attach, environment details you leave on (page address, browser and OS, screen size, app version, time), account email</td><td>Until the account is deleted</td></tr>
+</table></div>
+
+<h2 id="p2">2. What the local app sends and receives</h2>
+<p>Checked against the local app code as of October 24, 2026.</p>
+<div class="tbl"><table>
+<tr><th>When</th><th>What</th><th>Where</th><th>How to turn it off</th></tr>
+<tr><td>When the installed desktop app starts</td><td>An update check. The request carries your IP address, app version and OS. New versions are downloaded from GitHub.</td><td>notes.example.com/releases (Cloudflare); installers from github.com</td><td>Start the app with the environment variable ACARD_NO_UPDATE=1. There is no in-app switch yet.</td></tr>
+<tr><td>Only when you enter a license code</td><td>The license code, an account identifier and a random device number created on this PC</td><td>notes.example.com/api/license/activate</td><td>Nothing is sent if you do not register.</td></tr>
+<tr><td>Only when you connect an notes.example.com account and turn on backup, sync or publishing</td><td>The connected account, and the pages, backup files and attachments you chose to upload</td><td>notes.example.com</td><td>Nothing is sent once you disconnect or turn the feature off.</td></tr>
+</table></div>
+<p>The local app keeps your notes, files and settings in a data folder on your PC (for the desktop app on Windows, %APPDATA%\Acard). The local app has no AI feature that goes through Acard's servers. If you connect your own AI tool (for example Claude Code or Codex) to the local app, what you exchange with that tool is between you and its provider and never reaches Acard.</p>
+
+<h2 id="p3">3. Children under 14</h2>
+<p>Children under 14 cannot join the waitlist or create an account, and we do not collect their personal information. We ask you to confirm you are 14 or older when you sign up, and if we learn we have information from a child under 14 we delete it right away.</p>
+
+<h2 id="p4">4. Destruction</h2>
+<ul>
+<li>When the retention period ends or the purpose is achieved, we destroy the information without delay. If another law ever requires us to keep something, we will list the basis and items here and keep it separately. There is no such information now.</li>
+<li>Electronic files are deleted from the database so they cannot be restored. We do not handle personal information on paper.</li>
+<li>When you ask us to cancel your waitlist entry or delete your data, we do so within 7 days.</li>
+</ul>
+
+<h2 id="p5">5. Provision to third parties</h2>
+<p>We do not provide your personal information to third parties, except where a law specifically requires it or an investigative authority requests it through legal procedure, and then only to that extent. We never use it for advertising or sell it.</p>
+
+<h2 id="p6">6. Processors</h2>
+<p>We entrust the following companies with processing to run the service. If a company or task changes we update this policy right away.</p>
+<div class="tbl"><table>
+<tr><th>Processor</th><th>Task</th></tr>
+<tr><td>Supabase Pte. Ltd.</td><td>Database storage of waitlist entries, consent records, account, sign-in and profile data, feedback and AI feature usage records</td></tr>
+<tr><td>Cloudflare, Inc.</td><td>Running and securing the site, downloads and update server (abuse blocking), storing web app notes, edit history, images and attachments, running some web app AI features (polishing text, asking your notes, reading text in photos and similar), forwarding mail sent to hello@notes.example.com</td></tr>
+<tr><td>Plus Five Five, Inc. (Resend)</td><td>Sending invitations, sign-in link and code emails, and service alerts</td></tr>
+</table></div>
+<p>If you sign in with Google, you authenticate with Google directly and we receive only the name, email and profile picture Google provides.</p>
+
+<h2 id="p7">7. Transfers abroad</h2>
+<p>The processors above are overseas companies, so personal information is stored and processed outside Korea (PIPA Art. 28-8). Notes in the local app are not transferred.</p>
+<div class="tbl"><table>
+<tr><th>Recipient (contact)</th><th>Country</th><th>Items</th><th>When and how</th><th>Purpose and retention</th></tr>
+<tr><td>Supabase Pte. Ltd. (privacy@supabase.com)</td><td>Singapore (AWS Singapore region)</td><td>Waitlist email and optional answers, consent records, account, sign-in and profile data, feedback, AI feature usage records</td><td>Sent over an encrypted connection when you join, sign up or use the service</td><td>Database storage / periods in section 1</td></tr>
+<tr><td>Cloudflare, Inc. (privacyquestions@cloudflare.com)</td><td>United States and the countries of Cloudflare data centers (storage is requested in Asia-Pacific but cannot be pinned to one country)</td><td>IP address and request details, web app notes, edit history, images and attachments, text and images you give AI features, mail sent to hello@notes.example.com</td><td>Sent over an encrypted connection when you visit, save, run an AI feature or send mail</td><td>Running the site, storage, AI processing, mail forwarding / web app data until the account is deleted, the rest while it is processed</td></tr>
+<tr><td>Plus Five Five, Inc. (Resend, support@resend.com)</td><td>United States (sending servers in Japan, AWS Tokyo region)</td><td>Recipient email address, content of the email</td><td>Sent over an encrypted connection when an email is sent</td><td>Sending mail / until delivered (Resend's own policy governs its send logs)</td></tr>
+</table></div>
+<ul>
+<li>Basis: for the waitlist and sign-up we ask for separate consent to the transfer on the sign-up form (Art. 28-8(1)1). For site access and mail forwarding, the transfer is processing and storage needed to provide the service you asked for and is disclosed in this policy (Art. 28-8(1)3(a)).</li>
+<li>How to refuse and what happens: leave the transfer box unticked on the form, or withdraw a given consent by writing to hello@notes.example.com. Waitlist entries and accounts cannot be kept without this transfer, so refusing or withdrawing cancels the entry or account and we delete it. Web app AI features send nothing to Cloudflare AI unless you run them. Site access information is required to reach the site, so the only way to refuse it is to stop using the site.</li>
+</ul>
+
+<h2 id="p8">8. Security measures</h2>
+<p>These are the measures we actually take today.</p>
+<ul>
+<li>All traffic between your browser and our servers is encrypted with HTTPS. Stored data is encrypted with AES-256 by Supabase and Cloudflare.</li>
+<li>Passwords are stored only as hashes.</li>
+<li>Row-level security (RLS) is on for every table in the database, and waitlist entries and consent records can be read and written only with the service key held by the server. The key exposed to browsers cannot read or write these tables. The service key stays on the server.</li>
+<li>Access to personal information is limited to the operator, and the admin screens work only for signed-in admin accounts.</li>
+<li>Bursts of too many requests are blocked to limit unauthorized access and abuse.</li>
+</ul>
+
+<h2 id="p9">9. Cookies and browser storage</h2>
+<ul>
+<li>The site uses only cookies for staying signed in (acard_at, acard_rt), handling Google sign-in (acard_pkce, acard_next, acard_gauth, kept for 10 minutes) and the display language (acard_lang, one year), plus browser storage that helps pages draw faster.</li>
+<li>We use no advertising, analytics or tracking cookies and no third-party analytics tools.</li>
+<li>You can block cookies in your browser settings (for example Chrome Settings &gt; Privacy and security &gt; Third-party cookies / Delete browsing data). Features that need sign-in will not work if you do.</li>
+</ul>
+
+<h2 id="p10">10. Your rights and how to use them</h2>
+<ul>
+<li>You may ask to see, correct or delete your personal information, ask us to stop processing it, and withdraw consent. A legal representative or someone you authorize may ask on your behalf.</li>
+<li>How: write to hello@notes.example.com from the email you used. After confirming the request came from that address we reply with the result within 10 days. If a legal reason prevents us from doing what you ask, we tell you why.</li>
+<li>To cancel your waitlist entry or delete your account, ask the same way; we delete it within 7 days. Deleting an account removes the account, web app notes and files, and its waitlist, feedback and AI usage records. Local app data is on your PC, so you delete it yourself.</li>
+</ul>
+
+<h2 id="p11">11. Privacy officer and where to get help</h2>
+<ul>
+<li>Privacy officer name: Yu Sungjin (Representative)</li>
+<li>Contact: <a href="mailto:hello@notes.example.com">hello@notes.example.com</a> (privacy questions, complaints and requests for remedy)</li>
+</ul>
+<p>If you need help with an infringement of your personal information, you can report it to or consult these Korean agencies.</p>
+<ul>
+<li>Personal Information Dispute Mediation Committee: 1833-6972, <a href="https://www.kopico.go.kr" rel="noopener">www.kopico.go.kr</a></li>
+<li>Personal Information Infringement Report Center (KISA): 118, <a href="https://privacy.kisa.or.kr" rel="noopener">privacy.kisa.or.kr</a></li>
+<li>Korean National Police Agency: 182, <a href="https://ecrm.police.go.kr" rel="noopener">ecrm.police.go.kr</a></li>
+</ul>
+
+<h2 id="p12">12. Changes and history</h2>
+<ul>
+<li>This policy applies from October 24, 2026.</li>
+<li>We announce changes on the site 7 days before they take effect. Changes that are unfavorable to you, such as new items or purposes, are announced 30 days ahead with a before-and-after comparison.</li>
+</ul>
+<div class="tbl"><table>
+<tr><th>In effect</th><th>Summary</th></tr>
+<tr><td>October 24, 2026 -</td><td>Rewritten around the local app: what the local app sends, items, basis and retention per purpose, destruction, processors and transfers abroad, security measures, cookies, your rights, privacy officer, help agencies, history</td></tr>
+<tr><td>October 16 - 23, 2026</td><td>First version (<a href="/_site/privacy-20261016.html">see the previous version</a>, Korean and English)</td></tr>
+</table></div>
 </main>
 </body>
 </html>

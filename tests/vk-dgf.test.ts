@@ -72,6 +72,42 @@ describe("diagram flow components", () => {
     expect(a.match(/<marker id="([^"]+)/)![1]).not.toBe(b.match(/<marker id="([^"]+)/)![1]);
   });
 
+  test("cycle stage labels are never cut: long ko/en/zh titles wrap or grow the circles, and the visible text is the whole title", () => {
+    const sets: [string, string, string][][] = [
+      [["🌑", "지구 그림자 진입", "배터리 히터가 켜진다"], ["🔋", "전압 급강하", "3.3 V 아래로 순간 하락"], ["🔁", "와치독 재부팅", "컴퓨터가 멈췄다고 판단"], ["☀️", "햇빛 구간 충전", "다시 안전 모드로 깨어남"]],
+      [["🌑", "Enter Earth's shadow", "The battery heater turns on"], ["🔋", "Voltage dips", "Drops below 3.3 V for a moment"], ["🔁", "Watchdog reboot", "Thinks the computer froze"], ["☀️", "Charge in sunlight", "Wakes up in safe mode again"]],
+      [["🌑", "进入地球阴影区", "电池加热器开启"], ["🔋", "电压骤降", "瞬间跌破 3.3 V"], ["🔁", "看门狗重启", "判断计算机已死机"], ["☀️", "在日照区充电", "再次以安全模式唤醒"]],
+      [["⚙", "Configure the deployment pipeline for production", "Every step is checked twice"], ["▤", "Supercalifragilisticexpialidocious", ""], ["⌕", "검토하고 다시 계획을 세우는 아주 긴 단계 이름입니다", "설명"], ["▥", "短", "短"], ["♧", "一二三四五六七八九十一二三四五六七八九十", "说明"]],
+    ];
+    const unesc = (s: string) => s.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const bare = (s: string) => s.replace(/\s/g, "");
+    sets.forEach((set, k) => {
+      const html = dgfRender("diagram-cycle", { stages: set.map(([icon, title, text]) => ({ icon, title, text })) });
+      expect(html).not.toContain("…");
+      const [, , vw, vh] = html.match(/viewBox="([^"]+)"/)![1].split(" ").map(Number);
+      const stages = [...html.matchAll(/<g class="dgf-stage"[^>]*>(.*?)<\/g>/g)].map((m) => m[1]);
+      const circles = [...html.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/g)].map((m) => m.slice(1).map(Number));
+      circles.forEach(([x, y, r], i) => {
+        expect(r).toBeLessThanOrEqual(52);
+        expect(x - r).toBeGreaterThanOrEqual(0); expect(x + r).toBeLessThanOrEqual(vw);
+        expect(y - r).toBeGreaterThanOrEqual(0); expect(y + r).toBeLessThanOrEqual(vh);
+        const next = circles[(i + 1) % circles.length];
+        expect(Math.hypot(x - next[0], y - next[1])).toBeGreaterThan(r + next[2] + 10);
+      });
+      stages.forEach((g, i) => {
+        // Only the drawn <text> lines count; the <title> tooltip always held the whole label.
+        const label = [...g.matchAll(/<text[^>]*class="dgf-label"[^>]*>([^<]*)<\/text>/g)].map((m) => unesc(m[1])).join("");
+        const [, title, text] = set[i];
+        const listed = html.includes("dgf-cycle-notes") && html.includes("<b>" + title.replace(/'/g, "&#39;") + "</b>");
+        if (k < 3) expect(bare(label)).toBe(bare(title)); // the satellite post's real labels all fit inside their circles
+        else expect(label === "" ? listed : bare(label) === bare(title)).toBe(true);
+        const note = [...g.matchAll(/<text[^>]*class="dgc-muted"[^>]*>([^<]*)<\/text>/g)].map((m) => unesc(m[1]));
+        if (note.length) expect(note).toEqual([text]);
+        else if (text) expect(listed).toBe(true);
+      });
+    });
+  });
+
   test("pyramid levels widen monotonically with one note connector per level", () => {
     for (const n of [3, 4, 6, 8]) {
       const html = dgfRender("diagram-pyramid", { levels: dgfStages(n).map((s) => ({ title: s.title, note: "긴 설명 ".repeat(30) })) });

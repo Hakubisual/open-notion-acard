@@ -10,7 +10,8 @@ describe("unsafe media URLs (#87)", () => {
         const html = renderBlocks([{ id: "unsafe", type, text: "label", meta: { url, src: url } }]);
         expect(html).not.toMatch(/<[a-z][^>]*\s(?:href|src)=/);
         expect(html).not.toContain("<img");
-        expect(html).toContain(type === "button" ? "label" : url.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
+        // An image draws a 'cannot load' placeholder instead of its raw address (issue 176).
+        expect(html).toContain(type === "button" ? "label" : type === "image" ? "이미지를 불러올 수 없어요" : url.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
       }
     });
   }
@@ -109,6 +110,11 @@ describe("renderBlocks: 미디어·레이아웃 블록", () => {
     const html = parse("- [video] https://youtu.be/dQw4w9WgXcQ\n\n- [video] /media/clip.mp4");
     expect(html).toContain("youtube-nocookie.com/embed/dQw4w9WgXcQ");
     expect(html).toContain('<video controls preload="metadata" src="/media/clip.mp4">');
+  });
+
+  test("a video file block with an uploaded first frame shows it as the poster; any other poster value is left out", () => {
+    expect(renderBlocks([{ id: "v", type: "video", text: "", meta: { url: "/media/0123456789abcdef", poster: "/media/fedcba9876543210" } }] as any)).toContain('<video controls preload="metadata" poster="/media/fedcba9876543210" src="/media/0123456789abcdef">');
+    expect(renderBlocks([{ id: "v", type: "video", text: "", meta: { url: "/media/0123456789abcdef", poster: "javascript:x" } }] as any)).toContain('<video controls preload="metadata" src="/media/0123456789abcdef">');
   });
 
   test("임베드: 아는 플레이어는 그대로, 그 밖의 https 위젯은 샌드박스 프레임 (notion-parity C11)", () => {

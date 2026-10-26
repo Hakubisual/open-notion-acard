@@ -162,7 +162,8 @@ describe("sharing", () => {
     expect(found.url).toMatch(/^\/s\/o\/i\/[A-Za-z0-9_-]{43}$/);
     expect(found.code).toMatch(/^\d{6}$/);
     expect((await call("GET", "/root/")).status).toBe(303);
-    expect((await call("GET", found.url)).text).toContain("코드");
+    expect((await call("GET", found.url, { cookie: "acard_lang=ko" })).text).toContain("코드");
+    expect((await call("GET", found.url)).text).toContain("Confirm and open");
     expect((await call("POST", found.url, { form: { email: "guest@example.com", code: found.code === "000000" ? "111111" : "000000" } })).status).toBe(401);
     expect((await call("POST", found.url, { form: { email: "someone@else.dev", code: found.code } })).status).toBe(401);
     const guest = await verify(found, "guest@example.com");
@@ -237,12 +238,43 @@ describe("sharing", () => {
     expect(page.text).toContain(url + "/child/");
     expect((await call("GET", url + "/child/")).status).toBe(200);
     expect((await call("GET", url + "/other/")).status).toBe(404);
-    expect((await call("GET", url + "/media/" + ROOT_MEDIA)).status).toBe(200);
+    // #165: the page names its file with a signed address that runs out; the old unsigned one redirects to a fresh one.
+    const signedSrc = new RegExp(url + "/media/" + ROOT_MEDIA + "\\?k=(\\d+)\\.([A-Za-z0-9_-]{43})").exec(page.text);
+    expect(signedSrc).not.toBeNull();
+    const ends = Number(signedSrc![1]) * 1000;
+    expect(ends).toBeGreaterThan(Date.now() + 2 * 3600 * 1000 - 1000);
+    expect(ends).toBeLessThanOrEqual(Date.now() + 3 * 3600 * 1000);
+    expect((await call("GET", signedSrc![0])).status).toBe(200);
+    const legacy = await call("GET", url + "/media/" + ROOT_MEDIA);
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get("location")).toMatch(new RegExp("^" + url + "/media/" + ROOT_MEDIA + "\\?k=\\d+\\.[A-Za-z0-9_-]{43}$"));
+    expect((await call("GET", legacy.headers.get("location")!)).status).toBe(200);
+    const tampered = signedSrc![0].slice(0, -1) + (signedSrc![0].endsWith("A") ? "B" : "A");
+    expect((await call("GET", tampered)).status).toBe(403);
+    expect((await call("GET", url + "/media/" + ROOT_MEDIA + "?k=" + Math.floor(Date.now() / 1000 - 60) + "." + signedSrc![2])).status).toBe(403);
     expect((await call("GET", url + "/media/" + OTHER_MEDIA)).status).toBe(404);
+    expect((await call("GET", url + "/media/" + OTHER_MEDIA + "?k=" + signedSrc![1] + "." + signedSrc![2])).status).toBe(404);
     expect((await asOwner("PUT", "/api/page/root/access/general", { body: { mode: "link", role: "read", expires: Date.now() - 1000 } })).status).toBe(200);
     expect((await call("GET", url)).status).toBe(401);
+    // A signed file address still inside its hours stops with the link.
+    expect((await call("GET", signedSrc![0])).status).toBe(401);
     expect((await asOwner("PUT", "/api/page/root/access/general", { body: { mode: "invited" } })).status).toBe(200);
     expect((await call("GET", url)).status).toBe(401);
+  });
+
+  test("a shared video keeps its first-frame poster through the link's media route; a poster from another page is dropped", async () => {
+    const on = await asOwner("PUT", "/api/page/root/access/general", { body: { mode: "link", role: "read" } });
+    const url = on.data.link.url as string;
+    const video = (poster: string) => [{ id: "r1", type: "paragraph", text: "root body" }, { id: "v", type: "video", text: "", meta: { url: "/media/" + ROOT_MEDIA, poster } }];
+    expect((await asOwner("PUT", "/api/page/root", { body: { blocks: video("/media/" + OTHER_MEDIA) } })).status).toBe(200);
+    const shown = await call("GET", url);
+    const poster = new RegExp('poster="(' + url + "/media/" + OTHER_MEDIA + '\\?k=[^"]+)"').exec(shown.text);
+    expect(poster).not.toBeNull();
+    expect((await call("GET", poster![1])).status).toBe(200);
+    expect((await asOwner("PUT", "/api/page/root", { body: { blocks: video("/media/zzzz") } })).status).toBe(200);
+    const plain = await call("GET", url);
+    expect(plain.text).toMatch(new RegExp('<video controls preload="metadata" src="' + url + "/media/" + ROOT_MEDIA + '\\?k=\\d+\\.[A-Za-z0-9_-]{43}">'));
+    expect((await asOwner("PUT", "/api/page/root/access/general", { body: { mode: "invited" } })).status).toBe(200);
   });
 
   // #61: shared pages sent every original image (31 JPEGs, 7 MB on the owner's page) at full size with no dimensions.
@@ -287,18 +319,21 @@ describe("sharing", () => {
       for (const img of imgs) {
         expect(img).toContain('width="1600"');
         expect(img).toContain('height="900"');
-        expect(img).toContain(url + "/media/" + ROOT_MEDIA + "/480.webp 480w, " + url + "/media/" + ROOT_MEDIA + "/960.webp 960w, " + url + "/media/" + ROOT_MEDIA + "/1440.webp 1440w\"");
+        const k = /\?k=\d+\.[A-Za-z0-9_-]{43}/.exec(img)![0];
+        expect(img).toContain(url + "/media/" + ROOT_MEDIA + "/480.webp" + k + " 480w, " + url + "/media/" + ROOT_MEDIA + "/960.webp" + k + " 960w, " + url + "/media/" + ROOT_MEDIA + "/1440.webp" + k + " 1440w\"");
         expect(img).toContain("sizes=");
       }
       expect(imgs[0]).toContain('loading="eager"');
       expect(imgs[0]).toContain("data:image/webp;base64,AAAA");
       expect(imgs[1]).toContain('loading="lazy"');
       expect(imgs[1]).toContain("calc(0.5 * 760px)");
-      expect(page.text).toContain('<source type="image/avif" srcset="' + url + "/media/" + ROOT_MEDIA + "/480.avif 480w");
-      expect(page.text).toContain('href="' + url + "/media/" + ROOT_MEDIA + '"');
+      const k = /\?k=\d+\.[A-Za-z0-9_-]{43}/.exec(imgs[0])![0];
+      expect(page.text).toContain('<source type="image/avif" srcset="' + url + "/media/" + ROOT_MEDIA + "/480.avif" + k + " 480w");
+      expect(page.text).toContain('href="' + url + "/media/" + ROOT_MEDIA + k + '"');
       expect(page.text).not.toContain('"/media/' + ROOT_MEDIA);
       expect(page.text).not.toContain(" /media/" + ROOT_MEDIA);
-      const variant = await call("GET", url + "/media/" + ROOT_MEDIA + "/960.webp");
+      expect((await call("GET", url + "/media/" + ROOT_MEDIA + "/960.webp")).status).toBe(302);
+      const variant = await call("GET", url + "/media/" + ROOT_MEDIA + "/960.webp" + k);
       expect(variant.status).toBe(200);
       expect(variant.headers.get("content-type")).toBe("image/webp");
       expect(variant.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
@@ -363,7 +398,7 @@ describe("sharing", () => {
   test("an HTML block reaches link visitors only inside the sandbox, and only while the link allows it", async () => {
     const put = (slug: string, blocks: unknown[]) => asOwner("PUT", "/api/page/" + slug, { body: { blocks } });
     const before = { root: (await asOwner("GET", "/api/page/root")).data.blocks, other: (await asOwner("GET", "/api/page/other")).data.blocks };
-    const html = { id: "h1", type: "html", text: "<b id=chart>chart-on-root</b><script>document.title='x'</script>", meta: { caption: "링크 차트" } };
+    const html = { id: "h1", type: "html", text: "<h1>HTML 안 제목</h1><h2>둘째 제목</h2><b id=chart>chart-on-root</b><script>document.title='x'</script>", meta: { caption: "링크 차트" } };
     expect((await put("root", [...before.root, html])).status).toBe(200);
     expect((await put("other", [...before.other, { ...html, id: "h2", text: "<b>chart-on-other</b>" }])).status).toBe(200);
     const on = await asOwner("PUT", "/api/page/root/access/general", { body: { mode: "link", role: "read" } });
@@ -377,6 +412,11 @@ describe("sharing", () => {
     expect(frame).toContain('src="' + url + '/frame/h1"');
     expect(page.text).not.toContain("chart-on-root");
     expect(page.text).not.toContain("chart-on-other");
+    // The block's headings reach the sidebar TOC as links to the anchors beside the frame (acard-html-heading-toc).
+    const sideToc = /<aside class="sv-toc sv-toc-wide"[\s\S]*?<\/aside>/.exec(page.text)?.[0] ?? "";
+    expect(sideToc).toContain('href="#html-안-제목"');
+    expect(sideToc).toContain('<li class="l3"><a href="#둘째-제목">');
+    expect(page.text).toMatch(/<h2 id="html-안-제목" class="acv-head"[^>]*>HTML 안 제목<\/h2>[\s\S]*?<iframe[^>]*id="acv-fh1"/);
     const pageCsp = page.headers.get("content-security-policy") ?? "";
     expect(pageCsp).toContain("frame-src 'self'");
     expect(pageCsp).toMatch(/script-src 'sha256-[A-Za-z0-9+/]+=*';/);
@@ -639,6 +679,17 @@ describe("sharing", () => {
   const g = (method: string, path: string, body?: unknown) => call(method, path, { cookie: sweepGuest, body });
   const ownerButton = async (fx: Fx, actions: unknown[]) => (await asOwner("POST", "/api/db/" + fx.source + "/properties", { body: { name: "Btn", type: "button", config: { actions } } })).data.property.id;
   const SWEEP: Record<string, { setup?: (fx: Fx) => Promise<void>; run: (fx: Fx) => Promise<{ status: number }> }> = {
+    "synced-create-private-page": { run: (fx) => g("POST", "/api/page/" + fx.priv.page + "/synced", { ids: ["private"], base_updated: 0 }) },
+    "synced-edit-private-page": { run: (fx) => g("PATCH", "/api/page/" + fx.priv.page + "/synced/private", { blocks: [], base_updated: 0, source_updated: 0 }) },
+    "synced-detach-private-page": { run: (fx) => g("POST", "/api/page/" + fx.priv.page + "/synced/private/detach", { base_updated: 0, source_updated: 0 }) },
+    "block-move-private-target": {
+      setup: async (fx) => { expect((await asOwner("PUT", "/api/page/" + fx.src.page, { body: { blocks: [{ id: "move-me", type: "paragraph", text: "keep me" }] } })).status).toBe(200); },
+      run: async (fx) => {
+        const source = await asOwner("GET", "/api/page/" + fx.src.page);
+        const target = await asOwner("GET", "/api/page/" + fx.priv.page);
+        return g("POST", "/api/page/" + fx.src.page + "/move-blocks", { target: fx.priv.page, ids: ["move-me"], source_updated: source.data.page.updated, target_updated: target.data.page.updated });
+      },
+    },
     "row-patch-props": { run: (fx) => g("PATCH", "/api/db/" + fx.target + "/rows/" + fx.priv.id, { props: { [fx.note]: "changed" } }) },
     "row-patch-ord": { run: (fx) => g("PATCH", "/api/db/" + fx.target + "/rows/" + fx.priv.id, { ord: 999 }) },
     "row-delete": { run: (fx) => g("DELETE", "/api/db/" + fx.target + "/rows/" + fx.priv.id) },
@@ -1389,6 +1440,10 @@ describe("sharing", () => {
       'POST new RegExp(P + "\\\\/rename$")': ["row-page-title"],
       'POST new RegExp(P + "\\\\/move$")': [],
       'PATCH new RegExp(P + "\\\\/blocks$")': ["row-page-save"],
+      'POST new RegExp(P + "\\\\/move-blocks$")': ["block-move-private-target"],
+      'POST new RegExp(P + "\\\\/synced$")': ["synced-create-private-page"],
+      'PATCH new RegExp(P + "\\\\/synced\\\\/[^/]+$")': ["synced-edit-private-page"],
+      'POST new RegExp(P + "\\\\/synced\\\\/[^/]+\\\\/detach$")': ["synced-detach-private-page"],
       'POST new RegExp(P + "\\\\/button\\\\/[^/]+$")': ["block-button-create-row"],
       'PUT new RegExp(P + "\\\\/settings$")': [],
       'POST new RegExp(P + "\\\\/comments$")': [],
@@ -1722,11 +1777,11 @@ describe("sharing", () => {
   test("#116 the owner's share theme fixes the published page's theme; system keeps the viewer's setting", async () => {
     const url = (await asOwner("POST", "/api/page/root/access/publish")).data.url as string;
     const htmlTag = (text: string) => /<html[^>]*>/.exec(text)![0];
-    expect(htmlTag((await call("GET", url)).text)).toBe('<html lang="ko">');
+    expect(htmlTag((await call("GET", url, { cookie: "acard_lang=ko" })).text)).toBe('<html lang="ko">');
     expect((await asOwner("GET", "/api/page/root/access")).data.settings.theme).toBe("system");
     expect((await asOwner("PUT", "/api/page/root/access/settings", { body: { theme: "sepia" } })).status).toBe(400);
     expect((await asOwner("PUT", "/api/page/root/access/settings", { body: { theme: "dark" } })).status).toBe(200);
-    const dark = (await call("GET", url)).text;
+    const dark = (await call("GET", url, { cookie: "acard_lang=ko" })).text;
     expect(htmlTag(dark)).toBe('<html lang="ko" data-theme="dark">');
     expect(dark).toContain('<meta name="color-scheme" content="dark">');
     // The viewer's toggle still switches a fixed dark page to light.
@@ -1734,11 +1789,11 @@ describe("sharing", () => {
     expect((await asOwner("GET", "/api/page/root/access")).data.settings.theme).toBe("dark");
     // Another setting leaves the theme alone.
     await asOwner("PUT", "/api/page/root/access/settings", { body: { siteTitle: "" } });
-    expect(htmlTag((await call("GET", url)).text)).toBe('<html lang="ko" data-theme="dark">');
+    expect(htmlTag((await call("GET", url, { cookie: "acard_lang=ko" })).text)).toBe('<html lang="ko" data-theme="dark">');
     await asOwner("PUT", "/api/page/root/access/settings", { body: { theme: "light" } });
-    expect(htmlTag((await call("GET", url)).text)).toBe('<html lang="ko" data-theme="light">');
+    expect(htmlTag((await call("GET", url, { cookie: "acard_lang=ko" })).text)).toBe('<html lang="ko" data-theme="light">');
     await asOwner("PUT", "/api/page/root/access/settings", { body: { theme: "system" } });
-    expect(htmlTag((await call("GET", url)).text)).toBe('<html lang="ko">');
+    expect(htmlTag((await call("GET", url, { cookie: "acard_lang=ko" })).text)).toBe('<html lang="ko">');
     expect((await asOwner("DELETE", "/api/page/root/access/publish")).status).toBe(200);
   });
 
@@ -1876,18 +1931,21 @@ describe("sharing", () => {
       const url = (await asOwner("PUT", "/api/page/" + page + "/access/general", { body: { mode: "link", role: "edit" } })).data.link.url as string;
       const token = url.split("/").pop()!;
 
-      const shown = await call("GET", url);
+      const shown = await call("GET", url, { cookie: "acard_lang=ko" });
       expect(shown.status).toBe(200);
       expect(shown.text).toContain("편집 허용");
       expect(shown.text).toContain('href="/s/o/l/' + token + '"');
       expect((await call("PUT", "/api/page/" + page, { body: { blocks: [] } })).status).toBe(401);
 
-      expect((await call("GET", "/s/o/l/" + token)).text).toContain("코드 받기");
+      expect((await call("GET", "/s/o/l/" + token, { cookie: "acard_lang=ko" })).text).toContain("코드 받기");
+      expect((await call("GET", "/s/o/l/" + token)).text).toContain("Get code");
       expect((await call("POST", "/s/o/l/" + token, { form: { email: "not-an-email" } })).status).toBe(400);
       const asked = await call("POST", "/s/o/l/" + token, { form: { email: "Seymour@Example.com" } });
       expect(asked.status).toBe(200);
       expect(mails).toHaveLength(1);
       expect(mails[0].to).toEqual(["seymour@example.com"]);
+      // The code mail is in the visitor's language (English here: no Korean browser, no acard_lang).
+      expect(mails[0].subject).toMatch(/^Acard verification code \d{6}$/);
       const code = /\b(\d{6})\b/.exec(mails[0].text)![1];
       expect(asked.text).not.toContain(code);
       const verifyUrl = /action="(\/s\/o\/i\/[A-Za-z0-9_-]{43})"/.exec(asked.text)![1];
@@ -1959,20 +2017,30 @@ describe("sharing", () => {
     expect((await asOwner("PUT", "/api/page/" + page, { body: { blocks: [{ id: "t1", type: "paragraph", text: "keep" }] } })).status).toBe(200);
     const url = (await asOwner("PUT", "/api/page/" + page + "/access/general", { body: { mode: "link", role: "read" } })).data.link.url as string;
     const token = url.split("/").pop()!;
-    const shown = await call("GET", url);
+    const shown = await call("GET", url, { cookie: "acard_lang=ko" });
     expect(shown.text).toContain("읽기 전용");
     expect(shown.text).not.toContain("/s/o/l/");
     // The read link offers the owner-approved edit request instead (Discord follow-up to 114).
     expect(shown.text).toContain('href="/s/o/r/' + page + '?role=edit">편집 권한 요청</a>');
-    const askEdit = await call("GET", "/s/o/r/" + page + "?role=edit");
+    const askEdit = await call("GET", "/s/o/r/" + page + "?role=edit", { cookie: "acard_lang=ko" });
     expect(askEdit.status).toBe(200);
     expect(askEdit.text).toContain('<option value="edit" selected>편집 허용</option>');
-    const askPlain = await call("GET", "/s/o/r/" + page);
+    const askPlain = await call("GET", "/s/o/r/" + page, { cookie: "acard_lang=ko" });
     expect(askPlain.text).toContain('<option value="edit">편집 허용</option>');
     expect(askPlain.text).not.toContain(" selected");
-    const badEmail = await call("POST", "/s/o/r/" + page, { form: { email: "nope", role: "edit" } });
+    const badEmail = await call("POST", "/s/o/r/" + page, { cookie: "acard_lang=ko", form: { email: "nope", role: "edit" } });
     expect(badEmail.status).toBe(400);
     expect(badEmail.text).toContain('<option value="edit" selected>편집 허용</option>');
+    // The same page and form read in English for a reader without a Korean choice or browser (owner, slack C0C91GZDVC7
+    // 1792921459.431739: English example pages opened from X showed the request-edit flow in Korean).
+    const enPage = await call("GET", url);
+    expect(enPage.text).toContain('?role=edit">Request edit access</a>');
+    const askEn = await call("GET", "/s/o/r/" + page + "?role=edit");
+    expect(askEn.text).toContain('<html lang="en">');
+    expect(askEn.text).toContain('<option value="edit" selected>Can edit</option>');
+    expect(askEn.text).not.toMatch(/[\uac00-\ud7a3]/);
+    const badEn = await call("POST", "/s/o/r/" + page, { form: { email: "nope", role: "edit" } });
+    expect(badEn.text).toContain("Please check the email address.");
     const snapshot = () => JSON.stringify([owner.query("SELECT * FROM blocks WHERE page = ?").all(page), owner.query("SELECT count(*) AS n FROM share_invites").get(), owner.query("SELECT count(*) AS n FROM share_sessions").get()]);
     const before = snapshot();
     expect((await call("GET", "/s/o/l/" + token)).status).toBe(404);
@@ -2024,7 +2092,8 @@ describe("sharing", () => {
       "/import", "/import/",
       "/api/sync", "/api/upload", "/api/media-usage", "/api/media/" + OTHER_MEDIA, "/api/link-preview?url=https://x.test", "/api/media/import", "/api/page/other/attachments", "/api/import", "/api/import/md", "/api/import/batches", "/api/import/batches/impx0001", "/api/import/batches/impx0001/chunk", "/api/export?slug=other",
       "/api/export?scope=all", "/api/tree", "/api/search?q=zebra", "/api/backlinks?slug=other", "/api/pages", "/api/page/other", "/api/page/other/rename",
-      "/api/page/other/move", "/api/page/other/blocks", "/api/page/other/settings", "/api/page/other/comments", "/api/page/other/comments/oc",
+      "/api/page/other/move", "/api/page/other/blocks", "/api/page/other/move-blocks", "/api/page/other/settings", "/api/page/other/comments", "/api/page/other/comments/oc",
+      "/api/page/other/synced", "/api/page/other/synced/instance", "/api/page/other/synced/instance/detach",
       "/api/page/other/history", "/api/page/other/history/h1/restore", "/api/page/other/trash", "/api/page/other/restore", "/api/page/other/permanent",
       "/api/page/other/duplicate", "/api/page/other/from-template", "/api/page/other/share", "/api/page/other/share/" + "a".repeat(64), "/api/page/other/access",
       "/api/page/other/access/general", "/api/page/other/access/settings", "/api/page/other/access/publish", "/api/page/other/access/agents",

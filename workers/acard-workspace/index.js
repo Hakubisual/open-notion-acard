@@ -33,6 +33,14 @@ async function webhookTick(env, cron) {
   return await res.json();
 }
 
+// consent_records purge (#170, gate/consent.ts purgeConsents): the site runs it at most once per UTC day, so asking from
+// every cron run only retries a day whose first call failed.
+async function consentPurge(env) {
+  const res = await fetch(env.SITE_URL + "/__consent/purge", { method: "POST", headers: { "x-recurring-tick": env.RECURRING_TICK_SECRET || "" } });
+  if (!res.ok) throw new Error("consent purge " + res.status);
+  return await res.json();
+}
+
 function clean(params) {
   return (params || []).map((value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value));
 }
@@ -157,6 +165,56 @@ export class WorkspaceStore extends DurableObject {
     return { ok: true, used: next, alerted: Number(row.alerted) };
   }
 
+  // Streamed uploads (gate/_worker.js uploadStream) hold their bytes under a lease named after the upload: reserve adds
+  // them once (a repeated reserve for the same lease adds nothing), then exactly one of commit (the file was stored, the
+  // bytes stay counted) or release (it was not, the bytes go back) settles it. A lease nobody settled (the request died
+  // with its isolate) expires and is released by mediaSweep, from the next reserve or the 15-minute cron. A commit after
+  // its lease was swept counts the stored bytes again, so the total always equals what is in R2.
+  mediaLeases() {
+    this.sql.exec("CREATE TABLE IF NOT EXISTS media_leases (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, expires INTEGER NOT NULL)");
+  }
+
+  async mediaReserve(lease, bytes, cap, ttlMs) {
+    this.mediaLeases();
+    await this.mediaSweep();
+    const held = this.sql.exec("SELECT bytes FROM media_leases WHERE id = ?", String(lease)).toArray()[0];
+    const row = this.mediaLedger();
+    if (held) return { ok: true, used: Number(row.used), alerted: Number(row.alerted) };
+    const result = await this.mediaUsage(bytes, cap);
+    if (result.ok) this.sql.exec("INSERT INTO media_leases (id, bytes, expires) VALUES (?, ?, ?)", String(lease), Math.max(0, Number(bytes) || 0), Date.now() + Number(ttlMs));
+    return result;
+  }
+
+  async mediaCommit(lease, bytes) {
+    this.mediaLeases();
+    const held = this.sql.exec("SELECT bytes FROM media_leases WHERE id = ?", String(lease)).toArray()[0];
+    if (held) { this.sql.exec("DELETE FROM media_leases WHERE id = ?", String(lease)); return { ok: true, recounted: false }; }
+    await this.mediaUsage(Math.max(0, Number(bytes) || 0), Infinity);
+    return { ok: true, recounted: true };
+  }
+
+  async mediaRelease(lease) {
+    this.mediaLeases();
+    const held = this.sql.exec("SELECT bytes FROM media_leases WHERE id = ?", String(lease)).toArray()[0];
+    if (!held) return { ok: true, released: 0 };
+    this.sql.exec("DELETE FROM media_leases WHERE id = ?", String(lease));
+    await this.mediaUsage(-Number(held.bytes), Infinity);
+    return { ok: true, released: Number(held.bytes) };
+  }
+
+  async mediaSweep(now = Date.now()) {
+    this.mediaLeases();
+    const expired = this.sql.exec("SELECT id, bytes FROM media_leases WHERE expires <= ?", now).toArray();
+    let released = 0;
+    for (const lease of expired) {
+      this.sql.exec("DELETE FROM media_leases WHERE id = ?", lease.id);
+      released += Number(lease.bytes);
+    }
+    if (released) await this.mediaUsage(-released, Infinity);
+    const open = this.sql.exec("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS bytes FROM media_leases").one();
+    return { swept: expired.length, released, open: Number(open.n), openBytes: Number(open.bytes) };
+  }
+
   async mediaSetUsage(bytes) {
     this.mediaLedger();
     this.sql.exec("UPDATE media_ledger SET used = ? WHERE id = 1", Math.max(0, Number(bytes) || 0));
@@ -222,5 +280,7 @@ export default {
       if (!Number.isFinite(out.next)) return;
       return env.WORKSPACE.get(env.WORKSPACE.idFromName("global:webhooks")).armWebhooks(out.next);
     }).catch((error) => console.error("webhook tick failed", error instanceof Error ? error.message : String(error))));
+    ctx.waitUntil(consentPurge(env).catch((error) => console.error("consent purge failed", error instanceof Error ? error.message : String(error))));
+    ctx.waitUntil(env.WORKSPACE.get(env.WORKSPACE.idFromName("global:media")).mediaSweep().catch((error) => console.error("media lease sweep failed", error instanceof Error ? error.message : String(error))));
   },
 };

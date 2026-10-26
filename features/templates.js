@@ -11,6 +11,17 @@
       "markdown": "# My first weekly plan\n\nTurn this example into your own plan. Everything saves automatically.\n\n## Goal for this week\n\nWrite down one small goal you can finish.\n\n## To-dos\n\n- [ ] Monday: gather what you need\n- [ ] Wednesday: review progress\n- [ ] Friday: write down what you learned\n\n## Idea box\n\nKeep thoughts here as they come.\n\n## Weekly review\n\nOne thing that went well, one thing to change next time."
     }
   ];
+  // issue 147: the local app with ACARD_LANG=en|zh makes its example pages in English, not as Korean data.
+  const examplesEn = [
+    {
+      "name": "Getting started",
+      "markdown": "# Getting started\n\nBreak your thinking into small blocks and pick it up again wherever you need it.\n\n## Writing in blocks\n\nEvery paragraph is a block. Drag it by the handle on the left and indent it with Tab.\n\n## The slash menu\n\nType / on an empty line to add a heading, a to-do or a table. Choose New page to start from a template.\n\n- [ ] Click this to-do to check it off\n- [ ] Try the meeting notes template on a new page\n\n## Databases\n\nTrack status, owners and dates in tables and boards. Filter and sort to see only what matters.\n\n## Connecting agents\n\nYour own scripts and AI agents can read and write pages as Markdown through the API."
+    },
+    {
+      "name": "My first weekly plan",
+      "markdown": "# My first weekly plan\n\nTurn this example into your own plan. Everything saves automatically.\n\n## Goal for this week\n\nWrite down one small goal you can finish.\n\n## To-dos\n\n- [ ] Monday: gather what you need\n- [ ] Wednesday: review progress\n- [ ] Friday: write down what you learned\n\n## Idea box\n\nKeep thoughts here as they come.\n\n## Weekly review\n\nOne thing that went well, one thing to change next time."
+    }
+  ];
 
   // Seoul has no daylight saving, so a fixed +9h offset is exact.
   const fillVars = (text, title) => {
@@ -72,10 +83,11 @@
       if (method !== "POST") return helpers.json({ error: "지원하지 않는 요청이에요." }, 405);
       const redirect = (pages) => new Response(null, { status: 303, headers: { location: pages.length ? "/edit/" + encodeURIComponent(pages[0].slug) + "/" : "/", "cache-control": "no-store" } });
       if (existing) return redirect(JSON.parse(existing.value));
-      const pages = examples.map((example) => ({ slug: "example-" + crypto.randomUUID(), title: example.name }));
+      const chosen = env && (env.ACARD_LANG === "en" || env.ACARD_LANG === "zh") ? examplesEn : examples;
+      const pages = chosen.map((example) => ({ slug: "example-" + crypto.randomUUID(), title: example.name }));
       const receipt = JSON.stringify(pages);
       const statements = [db.prepare("INSERT OR IGNORE INTO feature_templates_state (key, value) SELECT 'examples', ? WHERE NOT EXISTS (" + editorPages + ")").bind(receipt)];
-      examples.forEach((example, index) => {
+      chosen.forEach((example, index) => {
         const page = pages[index];
         const owned = "EXISTS (SELECT 1 FROM feature_templates_state WHERE key = 'examples' AND value = ?)";
         statements.push(db.prepare("INSERT INTO pages (slug, title, parent, ord, kind, updated, source, hash) SELECT ?, ?, NULL, (SELECT COALESCE(MAX(ord), 0) + 10 FROM pages), 'note', ?, 'editor', NULL WHERE " + owned).bind(page.slug, page.title, Date.now(), receipt));

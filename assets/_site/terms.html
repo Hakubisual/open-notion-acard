@@ -17,56 +17,145 @@
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="이용약관 - Acard"><meta name="twitter:description" content="Acard 서비스를 이용할 때 적용되는 약관입니다."><meta name="twitter:image" content="https://notes.example.com/og.png"><meta name="twitter:image:alt" content="Acard - AI가 쓰고, 사람은 읽기 좋게">
 
 <link rel="preload" href="/fonts/pretendard-core.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
-<style>
-.legal { max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; color: var(--ink-2); }
-.legal h1 { font-size: var(--fs-32,32px); margin: 24px 0 8px; color: var(--ink); }
-.legal h2 { font-size: var(--fs-19,19px); margin: 32px 0 8px; color: var(--ink); }
-.legal .updated { color: var(--faint); font-size: var(--fs-14,14px); }
-.legal hr { border: 0; border-top: 1px solid var(--line); margin: 56px 0; }
-.legal a { color: var(--accent); }
-.legal .brand { display: inline-flex; gap: 8px; align-items: center; font-weight: 700; color: var(--ink); }
-.legal .brand img { width: 24px; height: 24px; }
-</style>
+<link rel="stylesheet" href="/_site/legal.css">
 </head>
 <body>
 <main class="legal">
 <a class="brand" href="/"><svg class="wordmark" viewBox="0 0 375.59 100" role="img" aria-label="Acard" focusable="false"><use href="/wordmark-symbol.svg#w"/></svg></a>
-<h1>이용약관</h1>
-<p class="updated">시행일: 2026년 10월 16일</p>
-<h2>1. 서비스</h2>
-<p>Acard는 AI가 쓴 마크다운 기록을 읽기 좋은 페이지로 보여 주는 워크스페이스입니다. 오픈소스로 직접 설치해 쓸 수 있고, notes.example.com의 Acard Cloud로도 쓸 수 있습니다.</p>
-<h2>2. 계정</h2>
-<p>이메일 또는 Google 계정으로 가입할 수 있습니다. 계정과 비밀번호는 본인이 관리해야 합니다.</p>
-<h2>3. 이용자의 콘텐츠</h2>
-<p>작성한 콘텐츠의 권리는 이용자에게 있습니다. 법을 어기거나 다른 사람의 권리를 침해하는 콘텐츠는 올리면 안 됩니다.</p>
-<h2>4. 서비스 변경과 중단</h2>
-<p>서비스는 현재 준비 단계로, 기능이 바뀌거나 일시적으로 중단될 수 있습니다. 중요한 변경은 미리 알립니다.</p>
-<h2>4-1. 클로즈 베타</h2>
-<p>지금 Acard Cloud는 초대 코드로만 들어올 수 있는 클로즈 베타입니다. 베타 기간에는 기능이 자주 바뀌고 오류가 있을 수 있으며, 베타 데이터는 정식 출시 전에 미리 알린 뒤 옮기거나 초기화할 수 있습니다. 초대 코드는 받은 사람만 써야 하고 팔거나 공개하면 안 됩니다.</p>
-<h2>5. 책임의 한계</h2>
-<p>법이 허용하는 범위에서 서비스는 "있는 그대로" 제공됩니다.</p>
-<h2>6. 문의</h2>
-<p><a href="mailto:hello@notes.example.com">hello@notes.example.com</a></p>
-<hr>
-<div lang="en">
-<h1>Terms of Service</h1>
-<p class="updated">Effective: October 16, 2026</p>
-<h2>1. The Service</h2>
-<p>Acard is a workspace that turns Markdown notes written by AI into readable pages. You can self-host the open-source version or use Acard Cloud at notes.example.com.</p>
-<h2>2. Accounts</h2>
-<p>You can sign up with an email address or a Google account. You are responsible for keeping your account credentials safe.</p>
-<h2>3. Your content</h2>
-<p>You keep the rights to the content you create. Do not upload content that is illegal or infringes the rights of others.</p>
-<h2>4. Changes and interruptions</h2>
-<p>The Service is in an early stage; features may change or be temporarily unavailable. We will announce important changes in advance.</p>
-<h2>4-1. Closed beta</h2>
-<p>Acard Cloud is currently a closed beta that requires an invite code. During the beta, features change often and bugs are expected; beta data may be migrated or reset before launch after notice. Invite codes are for the person who received them and must not be sold or published.</p>
-<h2>5. Limitation of liability</h2>
-<p>To the extent permitted by law, the Service is provided "as is".</p>
-<h2>6. Contact</h2>
-<p><a href="mailto:hello@notes.example.com">hello@notes.example.com</a></p>
-</div>
+<h1>Acard 이용약관</h1>
+<p class="updated">시행일: 2026년 10월 24일 · 이전 판: 2026년 10월 16일 ~ 10월 23일 적용 (<a href="/_site/terms-20261016.html">보기</a>)</p>
+<p class="lead">이 약관은 베타 기간 중에 전문가 검토를 거쳐 다시 고칠 수 있습니다. 고칠 때는 제3조의 방법으로 미리 알립니다.</p>
+<h2 id="toc">목차</h2>
+<p>제1조 목적 · 제2조 정의 · 제3조 약관의 게시와 변경 · 제4조 서비스의 제공과 변경 · 제5조 서비스의 중단과 종료 · 제6조 대기자 신청과 계정 · 제7조 탈퇴와 이용 제한 · 제8조 알림 방법 · 제9조 개인정보 보호 · 제10조 Acard 의 의무 · 제11조 계정과 초대 코드 관리 · 제12조 이용자의 의무 · 제13조 오픈소스와 외부 서비스 · 제14조 콘텐츠의 권리 · 제15조 공개 페이지와 신고 · 제16조 AI 기능 · 제17조 책임 · 제18조 분쟁 해결과 준거법 · 부칙</p>
+
+<h2 id="t1">제1조 목적</h2>
+<p>이 약관은 Acard(이하 "Acard")가 제공하는 로컬 앱, 공개 사이트, 웹 앱을 이용할 때 Acard 와 이용자 사이의 권리·의무와 책임을 정합니다.</p>
+
+<h2 id="t2">제2조 정의</h2>
+<ol>
+<li>"로컬 앱": 이용자 PC 에 설치해 쓰는 Acard 데스크톱 앱과 오픈소스 open-notion-acard 공식 배포본. 로컬 앱의 글과 파일은 이용자 PC 에 저장되며, 이용자가 notes.example.com 연결 기능을 켜지 않는 한 Acard 에 오지 않습니다.</li>
+<li>"공개 사이트": notes.example.com 의 소개 페이지, 다운로드, 대기자 신청, 이용자가 공개한 페이지.</li>
+<li>"웹 앱(Acard Cloud)": notes.example.com 에 로그인해 쓰는 웹 버전. 현재 내부 테스트 전용이며 외부 가입을 받지 않습니다. 초대 코드를 받은 사람만 들어올 수 있습니다.</li>
+<li>"콘텐츠": 이용자가 만든 글, 파일, AI 기능으로 만든 결과물.</li>
+</ol>
+
+<h2 id="t3">제3조 약관의 게시와 변경</h2>
+<ol>
+<li>Acard 는 이 약관을 공개 사이트에서 연결해 누구나 볼 수 있게 둡니다.</li>
+<li>약관을 바꿀 때는 바뀐 내용, 시행일, 바꾸는 이유를 시행일 7일 전부터 사이트에 알립니다. 이용자에게 불리한 변경은 30일 전부터 알리고, 바뀌기 전과 후를 나란히 보여 주며, 연락처를 아는 이용자에게는 이메일로도 알립니다.</li>
+<li>바뀐 약관은 시행일 이후부터 적용합니다.</li>
+<li>바뀐 약관에 동의하지 않으면 시행일 전에 탈퇴하거나 대기자 신청을 취소할 수 있습니다.</li>
+</ol>
+
+<h2 id="t4">제4조 서비스의 제공과 변경</h2>
+<ol>
+<li>Acard 는 로컬 앱 배포와 업데이트, 공개 사이트, 대기자 신청을 제공합니다. 웹 앱은 내부 테스트 범위에서만 제공합니다.</li>
+<li>Acard 는 서비스를 고치거나 기능을 바꿀 수 있습니다. 이용자에게 불리한 중요한 변경은 제3조 제2항과 같은 기간으로 미리 알립니다.</li>
+<li>로컬 앱이 기본으로 외부와 주고받는 것은 업데이트 확인뿐이며, 자세한 내용은 <a href="/privacy">개인정보 처리방침</a>에 적습니다.</li>
+</ol>
+
+<h2 id="t5">제5조 서비스의 중단과 종료</h2>
+<ol>
+<li>점검, 장애, 외부 업체 사정으로 서비스가 잠시 멈출 수 있습니다. 가능한 한 미리, 어려우면 사후에 알립니다.</li>
+<li>서비스를 종료할 때는 30일 전에 알리고, 그 기간 동안 데이터를 내보낼 수 있게 합니다.</li>
+<li>베타 기간의 웹 앱에서 데이터를 옮기거나 초기화해야 할 때도 미리 알리고 그 전에 내보낼 수 있게 합니다.</li>
+<li>이용자는 언제든 자신의 글을 마크다운이 담긴 zip 파일로 내보낼 수 있습니다. 로컬 앱은 이용자 PC 에서 그대로 동작하며, 서비스가 끝나도 PC 의 데이터는 남습니다.</li>
+</ol>
+
+<h2 id="t6">제6조 대기자 신청과 계정</h2>
+<ol>
+<li>만 14세 이상만 대기자 신청을 하거나 계정을 만들 수 있습니다.</li>
+<li>대기자 신청은 이메일과 필수 동의로 이뤄지며, 신청한다고 웹 앱 이용 권리가 생기지는 않습니다. 정식 출시 때 대기자 이메일로 가입하면 받는 혜택은 신청 화면에 적힌 내용을 따릅니다.</li>
+</ol>
+
+<h2 id="t7">제7조 탈퇴와 이용 제한</h2>
+<ol>
+<li>이용자는 언제든 탈퇴할 수 있습니다. 가입한 이메일로 hello@notes.example.com 에 요청하면 7일 안에 처리합니다. 대기자 신청도 같은 방법으로 취소할 수 있습니다.</li>
+<li>탈퇴하면 계정과 Acard 서버에 있는 콘텐츠를 지웁니다. 로컬 앱의 데이터는 이용자 PC 에 있으므로 Acard 가 지우지 않습니다.</li>
+<li>이용자가 제12조를 어기면 Acard 는 사유를 먼저 알리고 바로잡을 기회를 준 뒤 이용을 제한할 수 있습니다. 다른 사람에게 피해가 계속되는 등 급한 경우에는 먼저 제한하고 바로 알립니다.</li>
+</ol>
+
+<h2 id="t8">제8조 알림 방법</h2>
+<p>Acard 가 이용자에게 알릴 때는 이용자가 준 이메일로 보내고, 여러 사람에게 함께 알릴 일은 사이트에 7일 이상 게시하는 것으로 갈음할 수 있습니다. 다만 이용자에게 중요한 영향이 있는 일은 이메일로도 보냅니다.</p>
+
+<h2 id="t9">제9조 개인정보 보호</h2>
+<p>Acard 는 서비스에 필요한 최소한의 개인정보만 처리하며, 자세한 내용은 <a href="/privacy">개인정보 처리방침</a>을 따릅니다.</p>
+
+<h2 id="t10">제10조 Acard 의 의무</h2>
+<ol>
+<li>Acard 는 법과 이 약관이 금지하는 일을 하지 않고, 서비스를 안정적으로 제공하려고 노력합니다.</li>
+<li>Acard 는 이용자의 콘텐츠를 광고에 쓰거나 다른 회사에 팔지 않습니다.</li>
+<li>이용자 의견이나 불만은 hello@notes.example.com 로 받아 빨리 처리합니다.</li>
+</ol>
+
+<h2 id="t11">제11조 계정과 초대 코드 관리</h2>
+<ol>
+<li>계정과 비밀번호는 본인이 관리하고 다른 사람과 같이 쓰지 않습니다. 도용이 의심되면 바로 hello@notes.example.com 로 알려 주세요.</li>
+<li>초대 코드는 받은 사람만 쓰며 팔거나 공개하지 않습니다.</li>
+</ol>
+
+<h2 id="t12">제12조 이용자의 의무</h2>
+<p>이용자는 다음을 하면 안 됩니다.</p>
+<ol>
+<li>법을 어기는 내용이나 다른 사람의 저작권·상표권·초상권·명예를 침해하는 내용을 올리거나 공개하는 일</li>
+<li>다른 사람의 개인정보를 동의 없이 올리거나 공개하는 일</li>
+<li>다른 사람이나 Acard 를 사칭하는 일</li>
+<li>악성 코드를 퍼뜨리거나, 스팸을 보내거나, 서비스에 지나친 부하를 주거나, 허락받지 않은 방법으로 시스템에 접근하는 일</li>
+<li>자동화된 방법으로 공개 사이트나 다른 이용자의 공개 페이지를 대량 수집해 서비스 운영을 방해하는 일</li>
+<li>초대 코드나 계정을 팔거나 넘기는 일</li>
+</ol>
+
+<h2 id="t13">제13조 오픈소스와 외부 서비스</h2>
+<ol>
+<li>오픈소스 <a href="https://github.com/Hakubisual/open-notion-acard" rel="noopener">open-notion-acard</a> 의 소스 코드 이용·수정·배포는 그 라이선스(GNU AGPL-3.0)를 따르며, 소스 코드에 대해서는 이 약관보다 라이선스가 우선합니다.</li>
+<li>로컬 앱에 들어 있는 폰트 등 다른 사람의 구성 요소는 각자의 라이선스를 따르며, 목록은 공개 저장소의 THIRD_PARTY_NOTICES.md 에서 볼 수 있습니다.</li>
+<li>Acard 가 만들지 않은 플러그인·연동·외부 AI 서비스는 그 제공자의 조건을 따르며, Acard 는 그 동작을 보증하지 않습니다.</li>
+</ol>
+
+<h2 id="t14">제14조 콘텐츠의 권리</h2>
+<ol>
+<li>콘텐츠의 권리는 이용자에게 있습니다.</li>
+<li>웹 앱처럼 Acard 서버에 콘텐츠가 저장되는 경우, Acard 는 저장·표시·전송·백업 등 서비스 제공에 꼭 필요한 범위에서만, 대가 없이, 계정이 있는 동안만 콘텐츠를 이용합니다.</li>
+<li>이용자는 올리는 콘텐츠에 필요한 권리를 가지고 있어야 합니다.</li>
+</ol>
+
+<h2 id="t15">제15조 공개 페이지와 신고</h2>
+<ol>
+<li>이용자가 페이지를 공개하면 주소를 아는 누구나 볼 수 있습니다. 공개 여부는 언제든 바꿀 수 있고, 공개한 내용의 책임은 공개한 이용자에게 있습니다.</li>
+<li>공개 페이지가 권리를 침해하거나 법을 어긴다고 생각하면 페이지 아래의 "신고하기" 링크나 hello@notes.example.com 로 주소와 사유를 보내 주세요.</li>
+<li>권리 침해 신고가 사유를 갖추면 Acard 는 해당 페이지를 30일 이내의 기간 동안 비공개로 돌리는 임시 조치를 할 수 있고, 신고한 사람과 공개한 이용자 모두에게 알립니다. 공개한 이용자는 이의를 제기할 수 있습니다(「정보통신망 이용촉진 및 정보보호 등에 관한 법률」 제44조의2).</li>
+<li>저작권 침해 신고는 「저작권법」 제103조의 절차도 따릅니다.</li>
+</ol>
+
+<h2 id="t16">제16조 AI 기능</h2>
+<ol>
+<li>로컬 앱에는 Acard 서버를 거치는 AI 기능이 없습니다. 로컬 앱에 이용자가 연결한 AI 도구와 주고받는 내용은 이용자와 그 도구 제공자 사이의 일입니다.</li>
+<li>웹 앱(내부 테스트)의 AI 기능은 이용자가 직접 실행할 때만 동작하며, 그때 필요한 글이 AI 모델 제공자에게 전달됩니다.</li>
+<li>AI 결과물은 틀리거나 빠진 내용이 있을 수 있으니 중요한 판단 전에 확인해 주세요.</li>
+</ol>
+
+<h2 id="t17">제17조 책임</h2>
+<ol>
+<li>Acard 는 무료 베타와 오픈소스로 제공되며, 특정 목적에 꼭 맞는다거나 오류가 전혀 없다고 약속하지 않습니다. 로컬 앱 데이터의 백업은 이용자가 관리합니다. 앱은 데이터 폴더 안에 자동 백업 파일을 만들지만, 다른 곳에 따로 백업해 두기를 권합니다.</li>
+<li>그렇더라도 Acard 의 고의나 중대한 과실로 생긴 손해는 법에 따라 책임집니다. 이 약관의 어떤 조항도 법이 허용하지 않는 범위까지 책임을 줄이지 않습니다.</li>
+<li>이용자가 이 약관을 어겨 다른 사람이나 Acard 에 손해가 생기면 이용자가 책임집니다.</li>
+</ol>
+
+<h2 id="t18">제18조 분쟁 해결과 준거법</h2>
+<ol>
+<li>분쟁이 생기면 먼저 hello@notes.example.com 로 이야기해 주세요. Acard 는 이용자 불만을 빨리 처리합니다.</li>
+<li>이 약관은 대한민국 법에 따르며, 소송은 「민사소송법」에 따른 관할 법원에 제기합니다.</li>
+</ol>
+
+<h2 id="t19">부칙</h2>
+<p>이 약관은 2026년 10월 24일부터 시행합니다. 문의: <a href="mailto:hello@notes.example.com">hello@notes.example.com</a></p>
+<div class="tbl"><table>
+<tr><th>적용 기간</th><th>주요 내용</th></tr>
+<tr><td>2026년 10월 24일 ~</td><td>로컬 앱 중심으로 전체 재작성: 로컬 앱·공개 사이트·웹 앱(내부 테스트 전용) 정의, 변경 공지(7일, 불리하면 30일), 서비스 종료와 내보내기, 탈퇴와 이용 제한 절차, 오픈소스 라이선스, 콘텐츠 권리와 이용 범위, 공개 페이지 신고·임시 조치, AI 기능, 책임, 준거법</td></tr>
+<tr><td>2026년 10월 16일 ~ 10월 23일</td><td>최초 게시 (<a href="/_site/terms-20261016.html">이전 판 보기</a>)</td></tr>
+</table></div>
 </main>
 </body>
 </html>

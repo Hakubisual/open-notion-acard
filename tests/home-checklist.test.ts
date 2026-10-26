@@ -74,3 +74,12 @@ test("off, hidden, finished or never-started guides give the home back to the ol
   for (const g of [null, { enabled: false, active: false }, { enabled: true, active: false }, { enabled: true, active: true, done: true, celebrate: false, steps: steps(["page", "slash", "search", "share"]), count: 4 }]) expect(guide(g)).toBe("");
   expect(guide({ enabled: true, active: true, done: true, celebrate: true, count: 4, steps: steps(["page", "slash", "search", "share"]) })).toContain("data-guide-feedback");
 });
+
+test("the finish card names the right-click tools and the Tab palette only when /api/guide says they are on (#149)", () => {
+  const finished = { enabled: true, active: true, done: true, celebrate: true, count: 4, steps: steps(["page", "slash", "search", "share"]) };
+  const on = guide({ ...finished, editTools: "블록 위에서 오른쪽 클릭 = 블록 도구, 빈 줄에서 Tab = 기능 찾기" });
+  expect(on).toContain("data-guide-tools");
+  expect(on).toContain("빈 줄에서 Tab = 기능 찾기</p>");
+  for (const g of [finished, { ...finished, editTools: null }]) expect(guide(g)).not.toContain("data-guide-tools");
+  expect(guide({ enabled: true, active: true, count: 1, steps: steps(["page"]), editTools: "x" })).not.toContain("data-guide-tools");
+});

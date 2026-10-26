@@ -82,6 +82,19 @@ test("Korean, English, initial consonants and component aliases all match", () =
   expect(types(lib.slashSections(all, "zzqx"))).toEqual([]);
 });
 
+// #152: in English the menu shows "To-do" (i18n-app.js rewrites the Korean label), and typing what is shown found nothing.
+test("typing the label shown in English or Chinese finds that block first", () => {
+  for (const lang of ["en", "zh"]) {
+    const dict = JSON.parse(readFileSync(new URL("../assets/i18n/app-" + lang + ".json", import.meta.url), "utf8"));
+    (globalThis as any).window = { AcardLang: { text: (s: string) => dict[s] || s } };
+    try {
+      for (const entry of blockTypes) expect(first(dict[entry.label] || entry.label), lang + " " + entry.type).toBe(entry.type);
+      if (lang === "en") { expect(first("To-do")).toBe("to_do"); expect(first("to-do")).toBe("to_do"); }
+    } finally { delete (globalThis as any).window; }
+  }
+  expect(first("To-do")).toBe("to_do");
+});
+
 test("a query keeps only matches, best item first, and orders groups by their best item", () => {
   const sections = lib.slashSections(all, "표");
   expect(sections[0].items[0].type).toBe("database");

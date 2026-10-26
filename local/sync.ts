@@ -4,7 +4,10 @@
 // tables and backup format stay unchanged). Pages and their blocks, settings, view and tags travel; a database page also
 // carries its database (properties, views, templates, rules, form) and a row page its db_rows row and outgoing relation
 // links. Images and attachments referenced by a page or a row cell go up and come down by id. Conflicts follow
-// sync-merge.ts.
+// sync-merge.ts. Every conflict a PC finds is kept in sync_conflicts and rides along (doc.conflicts) with the next push
+// of that page and of its conflict copy, so every PC counts it once (#136). A table or row page that another PC made
+// separately under the same address is moved to a new address before the incoming one is written, so neither table
+// is overwritten and no row loses its table (#136).
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,11 +15,12 @@ import { join } from "node:path";
 import type { ArchiveDb, Row } from "../gate/archive";
 import type { LocalArchiveEnv } from "./archive";
 import type { CloudClient } from "./cloud";
-import { mergePage, type Side, type SyncBlock, type SyncDoc } from "./sync-merge";
+import { mergePage, type Side, type SyncBlock, type SyncConflict, type SyncDoc } from "./sync-merge";
 
 export const SYNC = {
   intervalMs: Number(process.env.ACARD_SYNC_INTERVAL_MS) > 0 ? Number(process.env.ACARD_SYNC_INTERVAL_MS) : 15_000,
   afterEditMs: Number(process.env.ACARD_SYNC_AFTER_EDIT_MS) > 0 ? Number(process.env.ACARD_SYNC_AFTER_EDIT_MS) : 2_000,
+  firstMs: Number(process.env.ACARD_SYNC_FIRST_MS) > 0 ? Number(process.env.ACARD_SYNC_FIRST_MS) : 1_000,
   pushBytes: 8 * 1024 * 1024,
   pushPages: 100,
 };
@@ -28,7 +32,11 @@ type Remote = { slug: string; seq: number; updated: number; device: string | nul
 export type SyncRun = { at: number; pulled: number; pushed: number; conflicts: string[]; error?: string };
 type Saved = { enabled: boolean; device: string; cursor: number; account: string | null; last: SyncRun | null; conflicts: number };
 
-const hashOf = (doc: SyncDoc | null) => (doc ? createHash("sha256").update(JSON.stringify({ ...doc, page: { ...doc.page, updated: 0 } })).digest("hex") : "deleted");
+const content = (doc: SyncDoc): SyncDoc => { const { conflicts: _c, ...rest } = doc; return rest; };
+const hashOf = (doc: SyncDoc | null) => (doc ? createHash("sha256").update(JSON.stringify({ ...content(doc), page: { ...doc.page, updated: 0 } })).digest("hex") : "deleted");
+// Conflict notes arriving from the server are checked here: anything malformed is ignored.
+const conflictsIn = (doc: SyncDoc | null): SyncConflict[] => (Array.isArray(doc?.conflicts) ? doc.conflicts : []).slice(0, 50).filter((c): c is SyncConflict =>
+  Boolean(c) && typeof c.id === "string" && c.id.length <= 64 && typeof c.slug === "string" && typeof c.title === "string" && Number.isFinite(c.at) && (c.copy === null || typeof c.copy === "string"));
 
 export function startSync(options: { env: LocalArchiveEnv; dataDir: string; ready: () => Promise<void>; cloud: CloudClient; notify: (slugs: string[]) => void; intervalMs?: number }) {
   const { env, dataDir, cloud } = options;
@@ -38,6 +46,7 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
   store.run("PRAGMA journal_mode = WAL");
   store.run("CREATE TABLE IF NOT EXISTS sync_base (slug TEXT PRIMARY KEY, seq INTEGER NOT NULL, hash TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, doc TEXT)");
   store.run("CREATE TABLE IF NOT EXISTS sync_media (id TEXT PRIMARY KEY)");
+  store.run("CREATE TABLE IF NOT EXISTS sync_conflicts (id TEXT PRIMARY KEY, at INTEGER NOT NULL, slug TEXT NOT NULL, title TEXT NOT NULL, copy TEXT, sent INTEGER NOT NULL DEFAULT 0)");
   let saved: Saved = { enabled: false, device: "d" + randomBytes(8).toString("hex"), cursor: 0, account: null, last: null, conflicts: 0 };
   if (existsSync(file)) try { saved = { ...saved, ...JSON.parse(readFileSync(file, "utf8")) }; } catch {}
   const save = () => writeFileSync(file, JSON.stringify(saved));
@@ -53,6 +62,16 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
   const setBase = (slug: string, seq: number, doc: SyncDoc | null, deleted: boolean) =>
     store.query("INSERT OR REPLACE INTO sync_base (slug, seq, hash, deleted, doc) VALUES (?, ?, ?, ?, ?)").run(slug, seq, deleted ? "deleted" : hashOf(doc), deleted ? 1 : 0, doc ? JSON.stringify(doc) : null);
   const baseDoc = (b: Base | null) => (b?.doc ? (JSON.parse(b.doc) as SyncDoc) : null);
+  // A conflict is counted once per PC: the PC that found it (mine, sent with the next push) and every PC that receives it.
+  function noteConflict(c: SyncConflict, run: SyncRun, mine: boolean) {
+    if (store.query("SELECT 1 FROM sync_conflicts WHERE id = ?").get(c.id)) return;
+    store.query("INSERT INTO sync_conflicts (id, at, slug, title, copy, sent) VALUES (?, ?, ?, ?, ?, ?)").run(c.id, c.at, c.slug, c.title.slice(0, 200), c.copy, mine ? 0 : 1);
+    saved.conflicts += 1;
+    run.conflicts.push(c.copy ?? c.slug);
+  }
+  const newConflict = (slug: string, title: string, copy: string | null): SyncConflict => ({ id: "k" + randomBytes(8).toString("hex"), at: Date.now(), slug, title, copy });
+  const conflictsOf = (slug: string) => store.query("SELECT id, at, slug, title, copy FROM sync_conflicts WHERE slug = ? OR copy = ? ORDER BY at DESC LIMIT 20").all(slug, slug) as SyncConflict[];
+  const unsentConflict = (slug: string) => Boolean(store.query("SELECT 1 FROM sync_conflicts WHERE sent = 0 AND (slug = ? OR copy = ?)").get(slug, slug));
 
   async function readDoc(slug: string): Promise<Side> {
     const page = (await all("SELECT slug, title, parent, ord, kind, updated FROM pages WHERE slug = ?", slug))[0];
@@ -201,6 +220,33 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
     return slug;
   }
 
+  // A table (or row) page made on another PC under the same address as one here is a different table: the local one moves
+  // to a new address, with every row of its own table, its sub-pages and the links that point at it by address, so the
+  // incoming one can be written without replacing it. A moved table is marked "(충돌 사본)"; a moved row keeps its title.
+  async function moveAside(doc: SyncDoc): Promise<string> {
+    const from = doc.page.slug, to = from + "-c" + randomBytes(3).toString("hex"), now = Date.now();
+    const title = doc.database && !doc.page.title.endsWith(CONFLICT_SUFFIX) ? doc.page.title + CONFLICT_SUFFIX : doc.page.title;
+    const statements = [
+      db.prepare("UPDATE pages SET slug = ?, title = ?, updated = ? WHERE slug = ?").bind(to, title, now, from),
+      db.prepare("UPDATE links SET src = ? WHERE src = ?").bind(to, from),
+    ];
+    for (const row of await all("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT IN ('pages', 'links')")) {
+      const table = String(row.name);
+      if ((await cols(table)).has("page")) statements.push(db.prepare('UPDATE "' + table + '" SET page = ? WHERE page = ?').bind(to, from));
+    }
+    if (doc.database) {
+      const id = doc.database.id;
+      statements.push(
+        db.prepare("UPDATE databases SET slug = ?, title = ?, updated = ? WHERE id = ?").bind(to, title, now, id),
+        db.prepare("UPDATE pages SET parent = ? WHERE parent = ? AND (kind <> 'db_row' OR slug IN (SELECT page FROM db_rows WHERE database_id = ?))").bind(to, from, id),
+        db.prepare("UPDATE db_properties SET config = json_set(config, '$.database', ?) WHERE json_valid(config) AND json_extract(config, '$.database') = ?").bind(to, from),
+        db.prepare("UPDATE blocks SET meta = json_set(meta, '$.database', ?) WHERE type = 'db_ref' AND json_valid(meta) AND json_extract(meta, '$.database') = ?").bind(to, from),
+      );
+    }
+    await db.batch(statements);
+    return to;
+  }
+
   // Every new data folder seeds the same example pages under random example-<uuid> slugs, so two PCs would otherwise
   // end up with both copies. An untouched, never-synced local example equal in title and text to an incoming one is the
   // same page: it goes to the trash (recoverable, identical content) and is never pushed.
@@ -216,11 +262,20 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
     }
   }
 
-  async function receive(remote: Remote, run: SyncRun, touched: Set<string>) {
-    const base = baseOf(remote.slug);
-    if (base && base.seq >= remote.seq) return;
+  async function receive(incoming: Remote, run: SyncRun, touched: Set<string>) {
+    const base = baseOf(incoming.slug);
+    if (base && base.seq >= incoming.seq) return;
+    for (const c of conflictsIn(incoming.doc)) noteConflict(c, run, false);
+    const remote: Remote = { ...incoming, doc: incoming.doc ? content(incoming.doc) : null };
     if (!base) await dropDuplicateExample(remote, touched);
-    const local = await readDoc(remote.slug);
+    let local = await readDoc(remote.slug);
+    const ld = local.doc, rd = remote.doc;
+    if (ld && rd && !remote.deleted && ((ld.database && rd.database && ld.database.id !== rd.database.id) || (ld.row && rd.row && ld.row.id !== rd.row.id))) {
+      const moved = await moveAside(ld);
+      if (ld.database) noteConflict(newConflict(remote.slug, ld.page.title, moved), run, true);
+      touched.add(moved);
+      local = await readDoc(remote.slug);
+    }
     const localExists = Boolean(local.doc);
     const localHash = local.deleted ? "deleted" : hashOf(local.doc);
     const remoteSide: Side = { deleted: remote.deleted, doc: remote.doc };
@@ -230,8 +285,9 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
       if (remote.deleted) await trash(remote.slug); else if (remote.doc) await writeDoc(remote.doc);
     } else {
       const merged = mergePage(base ? { deleted: base.deleted === 1, doc: baseDoc(base) } : null, local, remoteSide);
-      if (merged.copy) { const copy = await conflictCopy(merged.copy); run.conflicts.push(copy); touched.add(copy); saved.conflicts += 1; }
-      else if (merged.clash) run.conflicts.push(remote.slug);
+      const title = (merged.doc ?? remote.doc ?? local.doc)?.page.title ?? remote.slug;
+      if (merged.copy) { const copy = await conflictCopy(merged.copy); noteConflict(newConflict(remote.slug, title, copy), run, true); touched.add(copy); }
+      else if (merged.clash) noteConflict(newConflict(remote.slug, title, null), run, true);
       if (merged.deleted) await trash(remote.slug);
       else if (merged.doc && hashOf(merged.doc) !== localHash) await writeDoc(merged.doc);
       else if (merged.doc && local.deleted) await writeDoc(merged.doc);
@@ -272,8 +328,9 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
         const deleted = local.deleted || !local.doc;
         if (deleted && (!base || base.deleted === 1)) continue;
         const hash = deleted ? "deleted" : hashOf(local.doc);
-        if (base && base.hash === hash) continue;
-        pending.push({ slug, base: base?.seq ?? 0, deleted, updated: local.doc?.page.updated ?? Date.now(), hash, doc: deleted ? null : local.doc });
+        if (base && base.hash === hash && (deleted || !unsentConflict(slug))) continue;
+        const conflicts = deleted ? [] : conflictsOf(slug);
+        pending.push({ slug, base: base?.seq ?? 0, deleted, updated: local.doc?.page.updated ?? Date.now(), hash, doc: deleted ? null : conflicts.length ? { ...local.doc!, conflicts } : local.doc });
       }
       if (!pending.length) return;
       pending.sort((a, b) => Number(b.doc?.page.kind === "db") - Number(a.doc?.page.kind === "db"));
@@ -289,7 +346,11 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
         for (const result of body.results ?? []) {
           const item = batch.find((b) => b.slug === result.slug);
           if (!item) continue;
-          if (result.ok && typeof result.seq === "number") { setBase(item.slug, result.seq, item.deleted ? baseDoc(baseOf(item.slug)) : item.doc, item.deleted); run.pushed += 1; }
+          if (result.ok && typeof result.seq === "number") {
+            setBase(item.slug, result.seq, item.deleted ? baseDoc(baseOf(item.slug)) : item.doc && content(item.doc), item.deleted);
+            if (item.doc?.conflicts) store.query("UPDATE sync_conflicts SET sent = 1 WHERE sent = 0 AND (slug = ? OR copy = ?)").run(item.slug, item.slug);
+            run.pushed += 1;
+          }
           else if (result.conflict && result.current) { conflicted = true; await receive(result.current, run, touched); }
         }
       }
@@ -331,7 +392,7 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
   let soon: ReturnType<typeof setTimeout> | null = null;
   const intervalMs = options.intervalMs ?? SYNC.intervalMs;
   const timer = setInterval(() => { sync().catch(() => {}); }, intervalMs);
-  setTimeout(() => { sync().catch(() => {}); }, 1_000);
+  setTimeout(() => { sync().catch(() => {}); }, SYNC.firstMs);
 
   return {
     sync: syncFresh,
@@ -346,7 +407,8 @@ export function startSync(options: { env: LocalArchiveEnv; dataDir: string; read
       save();
       return on ? sync() : null;
     },
-    status: () => ({ enabled: saved.enabled, intervalMs, cursor: saved.cursor, last: saved.last, conflicts: saved.conflicts, running: Boolean(running), synced: (store.query("SELECT count(*) AS n FROM sync_base WHERE deleted = 0").get() as { n: number }).n }),
+    status: () => ({ enabled: saved.enabled, intervalMs, cursor: saved.cursor, last: saved.last, conflicts: saved.conflicts, running: Boolean(running),
+      recent: store.query("SELECT slug, title, copy, at FROM sync_conflicts ORDER BY at DESC LIMIT 5").all() as Omit<SyncConflict, "id">[], synced: (store.query("SELECT count(*) AS n FROM sync_base WHERE deleted = 0").get() as { n: number }).n }),
     stop() { clearInterval(timer); if (soon) clearTimeout(soon); store.close(); },
   };
 }

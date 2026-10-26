@@ -55,7 +55,8 @@ async function firstScreen(dist: string, page: string) {
   return { raw, gzip, files: [...files].sort() };
 }
 
-export type BudgetCaps = BudgetMetrics & { lazyMaxRaw: number };
+// lazyChunkCaps: a named lazy chunk that may be larger than lazyMaxRaw (each one has a dated entry in perf-budget.json).
+export type BudgetCaps = BudgetMetrics & { lazyMaxRaw: number; lazyChunkCaps?: Record<string, number> };
 
 export async function measurePerformanceBudget(dist: string, caps: BudgetCaps) {
   for (const key of [...Object.keys(labels), "lazyMaxRaw"] as (keyof BudgetCaps)[]) {
@@ -85,7 +86,8 @@ export async function measurePerformanceBudget(dist: string, caps: BudgetCaps) {
     passed: measured[key] <= caps[key],
   }));
   for (const [name, bytes] of [...lazy].sort()) {
-    rows.push({ key: "lazy/" + name, label: "지연 기능 / Lazy " + name, bytes, cap: caps.lazyMaxRaw, passed: bytes <= caps.lazyMaxRaw });
+    const cap = caps.lazyChunkCaps?.[name] ?? caps.lazyMaxRaw;
+    rows.push({ key: "lazy/" + name, label: "지연 기능 / Lazy " + name, bytes, cap, passed: bytes <= cap });
   }
   return { measured, rows, passed: rows.every((row) => row.passed), files: { reader: reader.files, editor: editor.files } };
 }

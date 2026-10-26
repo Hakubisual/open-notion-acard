@@ -2,6 +2,41 @@
 
 All notable changes to this project. Dates are UTC.
 
+## 0.3.3 - 2026-10-26
+
+### Fixed
+
+- Typing and saving in the editor on your own server (the desktop app or `bun local/main.ts`) no longer depends on a
+  hosted sign-in, so a fresh data folder takes text, saves it and shows it again after a reload.
+- The built-in server sends its font files, so pages draw in their own fonts instead of falling back to system fonts.
+- With the English interface, the home, tables, new databases, the share dialog, import, the `/` menu and the page
+  menu no longer show Korean words, and new database columns are named in the interface language.
+- Syncing two computers: when both change the same table, the changes from both are kept. The conflict count in
+  **My data** is the same on both computers, and a table made on the other computer under the same address arrives
+  as a conflict copy instead of replacing yours.
+
+### Changed
+
+- Deleting an account (at the bottom of Settings, on a server with accounts) removes everything it made: pages,
+  files, share links and connected agent apps, then the account itself. Its old share links answer "not found".
+
+### Added
+
+- Footnotes: write `[^id]` in text and the page shows a numbered link to the note, with a link back.
+- Headings written inside an HTML block appear in the table of contents.
+
+### 한국어 요약
+
+- 고침: 내 서버(데스크톱 앱이나 `bun local/main.ts`)의 편집기에서 글을 쓰고 저장하는 일이 호스팅 로그인과 상관없이 됩니다.
+  새 데이터 폴더에서도 글을 쓰고, 저장하고, 새로고침해도 그대로 남습니다.
+- 고침: 내장 서버가 글꼴 파일을 보내서 페이지가 시스템 글꼴이 아니라 원래 글꼴로 보입니다.
+- 고침: 영어 화면에서 홈, 표, 새 데이터베이스, 공유 창, 가져오기, `/` 메뉴, 페이지 메뉴에 한국어가 남지 않습니다.
+- 고침: 두 컴퓨터를 동기화할 때 같은 표를 양쪽에서 고쳐도 양쪽 변경이 모두 남습니다. **내 데이터** 의 충돌 수가 두 컴퓨터에서
+  같고, 다른 컴퓨터에서 같은 주소로 만든 표는 내 표를 덮어쓰지 않고 충돌 사본으로 들어옵니다.
+- 바뀜: 계정을 지우면(계정을 쓰는 서버의 설정 맨 아래) 그 계정이 만든 페이지, 파일, 공유 링크, 연결한 에이전트 앱이
+  모두 지워지고 계정도 지워집니다. 예전 공유 링크는 "찾을 수 없음"으로 답합니다.
+- 추가: 각주 - 글에 `[^id]` 를 쓰면 번호 링크와 돌아가기 링크가 생깁니다. HTML 블록 안의 제목도 목차에 들어갑니다.
+
 ## 0.3.2 - 2026-10-24
 
 ### Fixed

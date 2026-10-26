@@ -129,6 +129,9 @@ beforeAll(async () => {
     "/_site/index.html": "<html>LANDING notes.example.com</html>",
     "/_site/login.html": "<html>LOGIN</html>",
     "/_site/settings.html": "<html>SETTINGS</html>",
+    "/_site/desktop-wait.html": "<html>DESKTOP WAIT</html>",
+    "/_site/desktop-start.html": "<html>DESKTOP START</html>",
+    "/_site/desktop-tour.html": "<html>DESKTOP TOUR</html>",
     "/notes-seed.json": JSON.stringify({ pages: [{ slug: "owner-secret", title: "Owner Secret", parent: null, ord: 1, kind: "note", updated: 1, hash: "h1", blocks: [{ id: "b1", type: "paragraph", text: "zebra owner confidential", indent: 0 }] }] }),
     "/search-index.json": "[{\"t\":\"Owner Secret\"}]",
     "/owner-secret/index.html": "<html>OWNER STATIC zebra</html>",
@@ -226,11 +229,16 @@ describe("one site, many workspaces", () => {
 
   test("invalid account JSON objects return bad_json without throwing", async () => {
     const cookie = await as(OWNER_UID);
-    for (const path of ["/api/profile", "/api/auth/signup", "/api/auth/login", "/api/auth/forgot", "/api/auth/reset"]) {
+    for (const path of ["/api/profile", "/api/auth/login", "/api/auth/forgot", "/api/auth/reset"]) {
       for (const body of [null, [], "text", 42, true]) {
         const response = await call("POST", path, { cookie, body });
         expect([path, body, response.status, response.data.error]).toEqual([path, body, 400, "bad_json"]);
       }
+    }
+    // Email sign-up is closed (#173): the body is never read, so any body gets the same refusal.
+    for (const body of [null, [], "text", 42, true]) {
+      const response = await call("POST", "/api/auth/signup", { cookie, body });
+      expect([body, response.status, response.data.error]).toEqual([body, 403, "email_signup_closed"]);
     }
   });
 
@@ -297,6 +305,27 @@ describe("one site, many workspaces", () => {
   });
 
   // The old /connect page was merged into 설정 > 에이전트 연결 (owner pick 2026-10-20); old links must still land there.
+  test("desktop waiting is public, onboarding requires a session, and login preserves the handoff", async () => {
+    const cookie = await as(UID_A);
+    expect((await call("GET", "/desktop/wait")).text).toContain("DESKTOP WAIT");
+    expect((await call("GET", "/desktop/wait", { cookie })).text).toContain("DESKTOP WAIT");
+    for (const page of ["start", "tour"]) {
+      const path = "/desktop/" + page;
+      const anonymous = await call("GET", path);
+      expect(anonymous.status).toBe(303);
+      expect(anonymous.headers.get("location")).toBe("/login?next=" + encodeURIComponent(path));
+      const signedIn = await call("GET", path, { cookie });
+      expect(signedIn.status).toBe(200);
+      expect(signedIn.text).toContain("DESKTOP " + page.toUpperCase());
+      expect(signedIn.text).not.toContain("owner-secret");
+    }
+    const resumed = await call("GET", "/login?next=%2Fapi%2Fauth%2Fdesktop%2Fhandoff", { cookie });
+    expect(resumed.headers.get("location")).toBe("/api/auth/desktop/handoff");
+    const reserved = await call("GET", "/api/handle?h=desktop", { cookie });
+    expect(reserved.data.status).toBe("reserved");
+    expect((await call("GET", "/owner-secret/desktop/start", { cookie })).status).toBe(404);
+  });
+
   test("/connect sends signed-in and signed-out people to 설정 > 에이전트 연결", async () => {
     const cookie = await as(OWNER_UID);
     for (const [path, to] of [["/connect", "/settings/agents/"], ["/connect/", "/settings/agents/"], ["/connect?from=mail", "/settings/agents/?from=mail"]]) {

@@ -38,6 +38,7 @@ export declare const acardHost: {
   }>;
   isAgentError(error: unknown): error is Error & { status: number };
   storageAlertTest(env: CoreEnv): Promise<{ used: number; to: string | null; ok: boolean; status?: number; id?: string | null; error?: string }>;
+  storageUsage(env: CoreEnv): Promise<{ used: number; alerted: number; cap: number; alerts: number[]; uploading: { count: number; bytes: number } | null }>;
   challenge(message: string, next: string, status: number): Response;
   escapeHtml(text: string): string;
 };

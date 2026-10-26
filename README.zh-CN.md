@@ -100,7 +100,7 @@ Acard 有两种安装方式，按需选择即可。以后想换，用备份文�
 
 ### 个人安装（一台电脑）
 
-从[最新发布](https://github.com/Hakubisual/open-notion-acard/releases/latest)下载 `Acard-Local-Setup-0.3.2.exe`，
+从[最新发布](https://github.com/Hakubisual/open-notion-acard/releases/latest)下载 `Acard-Local-Setup-0.3.3.exe`，
 运行后在首屏选择 **在这台电脑上使用**。这样就完成了：应用会在后台启动自己的小服务器，笔记保存在
 `%APPDATA%\Acard Local\data`，不需要账号，也不需要密码，数据不会离开这台电脑。
 

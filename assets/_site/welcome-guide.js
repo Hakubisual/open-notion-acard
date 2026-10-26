@@ -18,7 +18,7 @@
     const onEditor = /^\/edit\//.test(where);
     const n = STEPS.indexOf(step) + 1;
     if (step === "page") return onEditor
-      ? { step, n, target: "#title", title: "제목을 쓰면 첫 페이지가 생겨요", body: "한 글자만 써도 돼요" }
+      ? { step, n, target: "#title", title: "AI가 쓴 마크다운을 여기에 붙여 넣어 보세요", body: "제목 한 줄만 써도 첫 페이지가 생겨요" }
       : { step, n, target: small ? "[data-new-page]" : ".fd-ib[aria-haspopup=menu], .side-new[data-act=new], .side-add[data-act=new], #new-page", title: "첫 페이지를 만들어 보세요", body: "제목만 써도 돼요" };
     if (step === "slash") return onEditor
       ? { step, n, target: "#blocks .blk .text", title: "/ 를 눌러 메뉴를 열어 보세요", body: "표·할 일·제목 같은 블록을 고를 수 있어요" }
@@ -147,8 +147,10 @@
   }
   function celebrate() {
     off();
-    box.innerHTML = '<p class="wg-k"></p><p class="wg-t">시작 가이드를 모두 마쳤어요</p><p class="wg-b">불편한 점이 있으면 화면 캡처로 알려 주세요</p><div class="wg-f"><button type="button" class="wg-go" data-guide-feedback>피드백 보내기</button><a href="/guide">자세한 사용법</a><button type="button" data-guide-close aria-label="닫기">닫기</button></div>';
+    // issue 149: the new editing tools in one line (text from /api/guide), only when they are on.
+    box.innerHTML = '<p class="wg-k"></p><p class="wg-t">시작 가이드를 모두 마쳤어요</p><p class="wg-b">불편한 점이 있으면 화면 캡처로 알려 주세요</p>' + (view.editTools ? '<p class="wg-b" data-guide-tools></p>' : "") + '<div class="wg-f"><button type="button" class="wg-go" data-guide-feedback>피드백 보내기</button><a href="/guide">자세한 사용법</a><button type="button" data-guide-close aria-label="닫기">닫기</button></div>';
     box.querySelector(".wg-k").textContent = "시작 가이드 " + 4 + " / 4";
+    if (view.editTools) box.querySelector("[data-guide-tools]").textContent = view.editTools;
     box.querySelector("[data-guide-feedback]").addEventListener("click", () => { const f = $(".fbt"); hide(); if (f) f.click(); });
     box.querySelector("[data-guide-close]").addEventListener("click", hide);
     box.hidden = false; if (ring) ring.classList.remove("wg-ring");

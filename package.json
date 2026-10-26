@@ -2,12 +2,13 @@
   "name": "acard-local",
   "private": true,
   "type": "module",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Acard Local: a self-hosted, local-first Notion-style workspace. Server + desktop app, AGPL-3.0.",
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261015.1",
     "@electric-sql/pglite": "^0.5.10",
     "@types/bun": "^1.4.3",
+    "mediabunny": "1.62.1",
     "typescript": "^5.9.3"
   },
   "scripts": {

@@ -111,12 +111,53 @@ test("broken, foreign and hostile zips are refused before anything changes", asy
   await expect(readZip(await writeZip([{ name: "../evil.txt", data: enc.encode("x") }]))).rejects.toThrow(/경로/);
   const future = await writeZip([{ name: "manifest.json", data: enc.encode(JSON.stringify({ format: "acard-archive", version: 99 })) }]);
   await expect(readArchive(future)).rejects.toThrow(/새 버전/);
-  const corrupt = zip.slice();
-  const at = corrupt.findIndex((_, i) => i > 100 && corrupt[i] === 0x7b);
-  corrupt[at + 1] ^= 0xff;
-  await expect(readArchive(corrupt)).rejects.toThrow();
   const c = await boot(47913);
   const res = await c.call("/__local/archive/import", { method: "POST", body: enc.encode("not a zip") });
+  expect(res.status).toBe(400);
+  expect(existsSync(join(c.dataDir, "backups"))).toBe(false);
+});
+
+// Fixed bytes, no timestamps: one stored entry (media/), one deflated entry (data/pages.json), so each flip lands in a
+// known place. A flip anywhere in a payload or in the central-directory CRC must be refused, never loaded silently.
+test("a flipped byte in a stored payload, a deflated payload or the CRC is refused", async () => {
+  const enc = new TextEncoder();
+  const mediaId = "0123456789abcdef";
+  const stored = Uint8Array.from({ length: 200 }, (_, i) => i);
+  const pages = enc.encode(JSON.stringify([{ slug: "intact", title: "손상 검사 ".repeat(20) }]));
+  const manifest = enc.encode(JSON.stringify({ format: "acard-archive", version: 1, created: 0, source: "test", app: "test", tables: { pages: 1 }, media: [{ id: mediaId, name: "bytes.bin", mime: "application/octet-stream", bytes: stored.length }], skipped: [] }));
+  const good = await writeZip([{ name: "manifest.json", data: manifest }, { name: "data/pages.json", data: pages }, { name: "media/" + mediaId, data: stored }]);
+  const parts = await readArchive(good);
+  expect(parts.media.get(mediaId)!.bytes).toEqual(stored);
+  expect(parts.tables.get("pages")![0].slug).toBe("intact");
+
+  const view = new DataView(good.buffer, good.byteOffset, good.byteLength);
+  const entry = (name: string) => {
+    const eocd = good.length - 22;
+    let pos = view.getUint32(eocd + 16, true);
+    for (let n = 0; n < view.getUint16(eocd + 10, true); n++) {
+      const nameLen = view.getUint16(pos + 28, true);
+      if (new TextDecoder().decode(good.subarray(pos + 46, pos + 46 + nameLen)) === name) {
+        const offset = view.getUint32(pos + 42, true);
+        return { central: pos, method: view.getUint16(pos + 10, true), start: offset + 30 + view.getUint16(offset + 26, true) + view.getUint16(offset + 28, true), size: view.getUint32(pos + 20, true) };
+      }
+      pos += 46 + nameLen + view.getUint16(pos + 30, true) + view.getUint16(pos + 32, true);
+    }
+    throw new Error("no entry " + name);
+  };
+  const flipped = (at: number) => { const bad = good.slice(); bad[at] ^= 0xff; return bad; };
+  const media = entry("media/" + mediaId);
+  const deflated = entry("data/pages.json");
+  expect([media.method, deflated.method]).toEqual([0, 8]);
+
+  await expect(readArchive(flipped(media.start + 100))).rejects.toThrow(/손상/);
+  await expect(readArchive(flipped(media.start + media.size - 1))).rejects.toThrow(/손상/);
+  await expect(readArchive(flipped(deflated.start + (deflated.size >> 1)))).rejects.toThrow(ArchiveError);
+  // The first deflate byte breaks the stream itself: still a refusal the import routes answer with 400, not a crash.
+  await expect(readArchive(flipped(deflated.start))).rejects.toThrow(ArchiveError);
+  await expect(readArchive(flipped(media.central + 16))).rejects.toThrow(/손상/);
+
+  const c = await boot(47914);
+  const res = await c.call("/__local/archive/import", { method: "POST", body: flipped(deflated.start) as BodyInit });
   expect(res.status).toBe(400);
   expect(existsSync(join(c.dataDir, "backups"))).toBe(false);
 });

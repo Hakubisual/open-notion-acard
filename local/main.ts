@@ -1,10 +1,12 @@
 // acard-server sidecar: the Electron shell (desktop/main.cjs) starts it with ACARD_DATA_DIR / ACARD_APP_DIR / ACARD_PORT,
 // waits for the READY line, and closes stdin to stop it. Closing stdin also stops it when the shell dies.
 // ACARD_LOCAL_API=1 enables tokenless local agents; ACARD_AGENT_TOKEN grants agent-only bearer access (24+ chars).
+// ACARD_LITE=1 is the desktop's light local mode (local/lite.ts): plain markdown pages, agents need <data>/agent-token.
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { startServer } from "./server";
 
+// ACARD_PORT=0 lets the OS pick a free port; the READY line carries the port actually bound.
 const port = Number(process.env.ACARD_PORT || 47811);
 const dataDir = process.env.ACARD_DATA_DIR;
 const appDir = process.env.ACARD_APP_DIR;
@@ -25,12 +27,12 @@ if (agentToken && agentToken.length < 24) {
 const lang = process.env.ACARD_LANG || undefined;
 let running: ReturnType<typeof startServer>;
 try {
-  running = startServer({ dataDir, appDir, port, host, allowedHosts, password, lang, localApi: process.env.ACARD_LOCAL_API !== "0", agentToken });
+  running = startServer({ dataDir, appDir, port, host, allowedHosts, password, lang, localApi: process.env.ACARD_LOCAL_API !== "0", agentToken, lite: process.env.ACARD_LITE === "1" });
 } catch (error) {
   console.error(String((error as Error).message || error));
   process.exit(2);
 }
-console.log("READY http://" + (host === "0.0.0.0" ? "127.0.0.1" : host) + ":" + port + "/" + (password ? " (password login on)" : ""));
+console.log("READY http://" + (host === "0.0.0.0" ? "127.0.0.1" : host) + ":" + running!.server.port + "/" + (password ? " (password login on)" : ""));
 const stop = () => { running.close(); process.exit(0); };
 // Desktop sidecar mode stops when the shell closes stdin. A LAN server (password set) runs under a service manager
 // whose stdin is empty, so it only stops on signals.

@@ -34,7 +34,8 @@
     document.removeEventListener("pointerdown", outside, true);
     window.removeEventListener("scroll", onScroll, true);
     if (restore !== false && back && back.focus) back.focus();
-    current = null;
+    var closed = current; current = null;
+    if (closed && closed.onClose) closed.onClose();
   }
   function outside(ev) { if (box && !box.contains(ev.target) && !(sub && sub.contains(ev.target))) close(false); }
   function onScroll() { close(false); }
@@ -152,8 +153,8 @@
     back = document.activeElement;
     current = ctx;
     box = el("div", "cm"); box.setAttribute("role", "menu");
-    box.setAttribute("aria-label", ctx.scope === "selection" ? "선택한 부분 도구" : "블록 도구");
-    box.appendChild(el("h3", "cm-head", ctx.scope === "selection" ? "선택한 부분" : "블록"));
+    box.setAttribute("aria-label", ctx.label || (ctx.scope === "selection" ? "선택한 부분 도구" : "블록 도구"));
+    box.appendChild(el("h3", "cm-head", ctx.label || (ctx.scope === "selection" ? "선택한 부분" : "블록")));
     if (ctx.scope === "selection") box.appendChild(formatRow(ctx));
     var last = null;
     items(ctx).forEach(function (item) {
@@ -161,9 +162,11 @@
       if (last !== null && g !== last) box.appendChild(el("hr", "cm-sep"));
       if (g !== last && GROUP_TITLE[g]) box.appendChild(el("h4", "cm-group", GROUP_TITLE[g]));
       last = g;
-      box.appendChild(menuButton(item, ctx));
+      var button = menuButton(item, ctx);
+      if (ctx.scope === "paste") button.dataset.urlChoice = item.id.replace("paste-url-", "");
+      box.appendChild(button);
     });
-    if (!matchMedia("(pointer: coarse)").matches) box.appendChild(el("p", "cm-hint", "브라우저 메뉴: Shift+오른쪽 클릭"));
+    if (ctx.scope !== "paste" && !matchMedia("(pointer: coarse)").matches) box.appendChild(el("p", "cm-hint", "브라우저 메뉴: Shift+오른쪽 클릭"));
     box.addEventListener("keydown", keys);
     place(box, ctx.x, ctx.y);
     document.body.classList.add("cm-open");
@@ -265,13 +268,14 @@
 
   var api = {
     register: function (item) {
-      if (!item || typeof item.id !== "string" || typeof item.label !== "string" || typeof item.run !== "function" || (item.scope !== "block" && item.scope !== "selection")) throw new TypeError("contextMenu.register needs {id, label, scope: 'block'|'selection', run}");
+      if (!item || typeof item.id !== "string" || typeof item.label !== "string" || typeof item.run !== "function" || !["block", "selection", "paste"].includes(item.scope)) throw new TypeError("contextMenu.register needs {id, label, scope: 'block'|'selection'|'paste', run}");
       registry = registry.filter(function (x) { return x.id !== item.id; }).concat([item]);
       return function () { registry = registry.filter(function (x) { return x !== item; }); };
     },
     openBlock: function (id, anchor) { var rect = anchor.getBoundingClientRect(); open(contextAt(anchor.closest(".blk") || rowOf(id), rect.right + 4, rect.top)); },
     openAt: function (target, x, y) { open(contextAt(target, x, y)); },
     openPageMarks: openPageMarks,
+    openPaste: function (ctx) { build(Object.assign({}, ctx, { scope: "paste", label: "주소 붙여넣기" })); },
     close: close,
     get current() { return current ? { scope: current.scope, blockId: current.blockId, selection: current.selection } : null; }
   };

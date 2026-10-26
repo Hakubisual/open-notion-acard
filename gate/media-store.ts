@@ -4,6 +4,10 @@
 // this wrapper sends original keys (…media/<16 hex>) to R2 and the rest to KV. The /media/<id> addresses do not change.
 
 type KvLike = {
+  // Only the R2-backed store has these: a streamed original (never held whole in memory) and a raw R2 read (Range).
+  putStream?(key: string, body: ReadableStream, metadata: Record<string, unknown>): Promise<{ httpEtag?: string; size?: number } | null>;
+  r2Object?(key: string, options?: { range?: { offset: number; length?: number } | { suffix: number } }): Promise<R2Body | null>;
+  r2Head?(key: string): Promise<{ size: number; meta: Record<string, unknown> } | null>;
   get(key: string, options?: unknown): Promise<unknown>;
   getWithMetadata(key: string, options?: unknown): Promise<{ value: unknown; metadata: unknown }>;
   put(key: string, value: unknown, options?: unknown): Promise<void>;
@@ -12,8 +16,9 @@ type KvLike = {
 };
 
 type R2Object = { key: string; size: number; customMetadata?: Record<string, string>; httpMetadata?: { contentType?: string }; arrayBuffer(): Promise<ArrayBuffer>; text(): Promise<string> };
+export type R2Body = R2Object & { body: ReadableStream; httpEtag?: string; range?: { offset?: number; length?: number; suffix?: number }; meta: Record<string, unknown> };
 export type R2Like = {
-  get(key: string): Promise<R2Object | null>;
+  get(key: string, options?: unknown): Promise<R2Object | null>;
   head(key: string): Promise<{ key: string; size: number; customMetadata?: Record<string, string> } | null>;
   put(key: string, value: unknown, options?: unknown): Promise<unknown>;
   delete(key: string | string[]): Promise<void>;
@@ -59,6 +64,21 @@ export function hybridMedia(kv: KvLike, r2: R2Like): KvLike & { readonly r2: R2L
   return {
     r2,
     kv,
+    // body must be a stream of known length (FixedLengthStream); a stream that errors or ends short stores nothing.
+    async putStream(key, body, metadata) {
+      if (!ORIGINAL_KEY.test(key)) throw new Error("putStream is for media originals only");
+      return (await r2Put(r2, key, body, { metadata })) as { httpEtag?: string; size?: number } | null;
+    },
+    async r2Object(key, options) {
+      if (!ORIGINAL_KEY.test(key)) return null;
+      const object = (await r2.get(key, options)) ?? (await r2.get(QUARANTINE + key, options));
+      return object ? Object.assign(object as R2Body, { meta: readMeta(object) }) : null;
+    },
+    async r2Head(key) {
+      if (!ORIGINAL_KEY.test(key)) return null;
+      const object = (await r2.head(key)) ?? (await r2.head(QUARANTINE + key));
+      return object ? { size: object.size, meta: readMeta(object) } : null;
+    },
     async get(key, options) {
       if (!ORIGINAL_KEY.test(key)) return kv.get(key, options);
       const object = (await r2.get(key)) ?? (await quarantined(r2, key));

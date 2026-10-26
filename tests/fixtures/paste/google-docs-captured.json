@@ -1,0 +1,20 @@
+{
+  "source": "Google Docs task-created QA document",
+  "documentId": "1n0YFc_5Wm-2e3es9LC0CVCp1UqzQTf3eg7JhFSvu2DA",
+  "capturedAt": "2026-10-25T18:45:50.889Z",
+  "method": "Native Ctrl+A then Ctrl+C; observed real Docs copy event data after app filled clipboardData",
+  "types": [
+    "text/html",
+    "text/plain",
+    "application/x-vnd.google-docs-document-slice-clip+wrapped",
+    "application/x-vnd.google-docs-internal-clip-id"
+  ],
+  "plain": "Acard clipboard source\r\nParent item\r\nNested detail\r\nFinal paragraph\r\n",
+  "expected": [
+    "Acard clipboard source",
+    "Parent item",
+    "Nested detail",
+    "Final paragraph"
+  ],
+  "coverage": "Four paragraphs; nested list capture still required for complete source-fidelity acceptance."
+}

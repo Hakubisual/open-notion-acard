@@ -1,7 +1,7 @@
 {
   "name": "acard-local-desktop",
   "productName": "Acard Local",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "Acard Local: Notion-style notes on your own computer, or a client for your team's Acard server",
   "author": "Acard contributors",

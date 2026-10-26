@@ -5,17 +5,18 @@
 <meta name="color-scheme" content="light dark">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-i18n="meta.dl.title">Download Acard</title>
-<meta name="description" content="The Acard app for Windows and macOS. Free, no account needed, your notes stay on your computer." data-i18n-attr="content:meta.dl.desc">
+<meta name="description" content="The Acard app for Windows, macOS and Linux. Free, no account needed, your notes stay on your computer." data-i18n-attr="content:meta.dl.desc">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="https://notes.example.com/download">
 <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Acard"><meta property="og:url" content="https://notes.example.com/download">
 <meta property="og:title" content="Download Acard">
-<meta property="og:description" content="The Acard app for Windows and macOS. Free, no account needed, your notes stay on your computer.">
+<meta property="og:description" content="The Acard app for Windows, macOS and Linux. Free, no account needed, your notes stay on your computer.">
 <meta property="og:image" content="https://notes.example.com/og.png"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Acard - AI writes. People read with ease.">
 <meta property="og:locale" content="en_US"><meta property="og:locale:alternate" content="ko_KR"><meta property="og:locale:alternate" content="zh_CN">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Download Acard"><meta name="twitter:description" content="The Acard app for Windows and macOS. Free, no account needed, your notes stay on your computer."><meta name="twitter:image" content="https://notes.example.com/og.png"><meta name="twitter:image:alt" content="Acard - AI writes. People read with ease.">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Download Acard"><meta name="twitter:description" content="The Acard app for Windows, macOS and Linux. Free, no account needed, your notes stay on your computer."><meta name="twitter:image" content="https://notes.example.com/og.png"><meta name="twitter:image:alt" content="Acard - AI writes. People read with ease.">
 <link rel="preload" href="/fonts/pretendard-core.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
 <style>
 .dl { max-width: 1120px; margin: 0 auto; padding: 88px 24px 120px; }
@@ -32,6 +33,9 @@
 .dl-note { margin-top: 24px; padding: 18px 20px; border-radius: 10px; background: var(--accent-soft); color: var(--ink-2); font-size: var(--fs-16); line-height: 1.65; }
 .dl-note b { color: var(--ink); }
 .dl-note ol { margin: 6px 0 0; padding-left: 20px; }
+.dl-note code { font-family: var(--mono); font-size: .92em; overflow-wrap: anywhere; }
+#linux { grid-column: 1 / -1; min-width: 0; }
+#linux .dl-btns { grid-template-columns: 1fr 1fr; }
 .dl-facts { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
 .dl-facts div { padding: 26px 28px; border-radius: 12px; background: var(--bg-soft); }
 .dl-facts h3 { margin: 0 0 6px; font-size: var(--fs-21); font-weight: 700; }
@@ -49,6 +53,7 @@
   .dl-card h2 { font-size: var(--fs-24); }
   .dl-meta { margin-bottom: 18px; }
   .dl-btns .btn { height: 52px; font-size: var(--fs-17); }
+  #linux .dl-btns { grid-template-columns: 1fr; }
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #191919; --bg-soft: #232323; --ink: #ececec; --ink-2: #d4d4d4; --muted: #a3a3a3; --line: #333; --accent-soft: #2a2640; }
@@ -59,19 +64,7 @@
 </style>
 </head>
 <body>
-<header class="nav">
-  <div class="nav-in">
-    <a class="brand" href="/"><svg class="wordmark" viewBox="0 0 375.59 100" role="img" aria-label="Acard" focusable="false"><use href="/wordmark-symbol.svg#w"/></svg></a>
-    <nav class="nav-links">
-      <a href="/#features" data-i18n="land.nav.product">Product</a>
-      <a href="/#pricing" data-i18n="land.nav.pricing">Pricing</a>
-      <a href="/guide" data-i18n="land.nav.guide">Get started</a>
-    </nav>
-    <div class="nav-right">
-      <nav class="lang-switch" aria-label="Language" data-i18n-attr="aria-label:lang.label"><a href="?lang=en" data-lang="en" lang="en">EN</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></nav>
-    </div>
-  </div>
-</header>
+<!--site-nav-->
 <main class="dl">
   <h1 data-i18n="dl.title">Download Acard</h1>
   <p class="sub" data-i18n="dl.sub">Free, no account needed. Your notes are saved on your computer, and your AI agents can write to them.</p>
@@ -93,6 +86,16 @@
       <p class="dl-pending" data-release-pending="mac" data-i18n="dl.pending">This build is on its way. Check back soon.</p>
       <div class="dl-note" data-i18n-html="dl.mac.gatekeeper"><b>The first time you open it</b>, macOS says Apple could not verify it, because the app is not notarized yet.<ol><li>Drag Acard to Applications and open it once, then click <b>Done</b>.</li><li>Open <b>System Settings &gt; Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>.</li><li>Confirm with your password. After that it opens normally.</li></ol></div>
     </section>
+    <section class="dl-card" id="linux">
+      <h2>Linux</h2>
+      <p class="dl-meta"><span data-i18n="dl.linux.req">Linux, 64-bit Intel / AMD (x86_64)</span> · <span data-i18n="dl.version">Version</span> <span data-release-version="linux">-</span></p>
+      <div class="dl-btns" data-release-ready="linux">
+        <a class="btn btn-primary" href="/download/linux-appimage" data-i18n="dl.linux.appimage">Download AppImage</a>
+        <a class="btn" href="/download/linux-tar" data-i18n="dl.linux.tar">Download tar.gz</a>
+      </div>
+      <p class="dl-pending" data-release-pending="linux" data-i18n="dl.pending">This build is on its way. Check back soon.</p>
+      <div class="dl-note" data-i18n-html="dl.linux.run"><b>AppImage:</b> Open a terminal in the download folder. Replace <code>VERSION</code> with the downloaded version, then run <code>chmod +x Acard-VERSION-linux-x86_64.AppImage</code> and <code>./Acard-VERSION-linux-x86_64.AppImage</code>.<br><b>tar.gz:</b> Unpack the archive, open a terminal in the extracted folder containing <code>acard</code>, and run <code>./acard</code>.</div>
+    </section>
   </div>
   <div class="dl-facts">
     <div><h3 data-i18n="dl.fact.data.title">Your data stays yours</h3><p data-i18n-html="dl.fact.data">Notes live in one folder on your computer (<code>%APPDATA%\Acard</code> on Windows, <code>~/Library/Application Support/Acard</code> on Mac). Uninstalling keeps it.</p></div>
@@ -101,5 +104,6 @@
   </div>
   <p class="dl-foot" data-i18n-html="dl.foot">Prefer to build it yourself? The source is on <a href="https://github.com/Hakubisual/open-notion-acard" rel="noopener">GitHub</a>.</p>
 </main>
+<script src="/_site/waitlist.js" defer></script>
 </body>
 </html>

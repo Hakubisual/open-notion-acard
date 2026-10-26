@@ -98,20 +98,29 @@ registerComponent({
 
 registerComponent({
   id: "block-footnotes", family: "block", name: "각주",
-  description: "A numbered notes list of {id, text} entries with fn-<id> fragment targets for references elsewhere in the document.",
+  description: "A numbered notes list of {id, text} entries. Body text cites a note as [^id] (e.g. [^1]): the page draws a linked superscript number in citation order, and the note links back with ↩.",
   schema: { type: "object", properties: { ...bltCommon, notes: { type: "array", items: { type: "object", properties: { id: { type: "string", pattern: "^[A-Za-z0-9_-]+$" }, text: { type: "string" } }, required: ["id", "text"] } } }, required: ["notes"] },
   presets: bltPresets, defaults: { notes: [] },
   sample: { notes: [{ id: "1", text: "Kim, M. (2024). 디지털 노트의 사용자 경험 연구. 서울: 지식출판사." }, { id: "2", text: "Lee, J. (2023). 협업 도구가 팀 생산성에 미치는 영향. 한국정보학회지, 34(2), 123–145." }, { id: "3", text: "Park, S. (2022). 지식 관리와 학습의 연결성에 관한 연구. 한국교육공학회 논문지, 28(1), 45–67." }] },
-  slash: { label: "각주", hint: "본문에서 연결하는 주석 목록", ico: "⁎", aliases: "각주 주석 미주 footnotes notes reference" },
+  slash: { label: "각주", hint: "본문에 [^1]처럼 쓰면 번호로 연결되는 주석 목록", ico: "⁎", aliases: "각주 주석 미주 footnotes notes reference" },
   css: bltCss("block-footnotes") +
-    ".ui-block-footnotes ol{margin:0;padding-left:var(--space-5);display:grid;gap:var(--space-2);font-size:var(--fs-13);color:var(--color-text-dim)}.ui-block-footnotes li{padding-left:var(--space-1);scroll-margin-top:var(--space-6)}.ui-block-footnotes li::marker{font-variant-numeric:tabular-nums}.ui-block-footnotes li:target{background:var(--color-accent-soft);color:var(--color-text)}.ui-block-footnotes li:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}",
+    ".ui-block-footnotes ol{margin:0;padding-left:var(--space-5);display:grid;gap:var(--space-2);font-size:var(--fs-13);color:var(--color-text-dim)}.ui-block-footnotes li{padding-left:var(--space-1);scroll-margin-top:var(--space-6)}.ui-block-footnotes li::marker{font-variant-numeric:tabular-nums}.ui-block-footnotes li:target{background:var(--color-accent-soft);color:var(--color-text)}.ui-block-footnotes li:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}.ui-block-footnotes .blt-back{margin-left:var(--space-1);color:var(--color-accent-strong);text-decoration:none}.ui-block-footnotes .blt-back:hover{text-decoration:underline}",
   render(d, h) {
     const seen = new Set();
     const notes = h.list(d.notes, 100).filter((n) => n && typeof n === "object").map((n) => ({ id: h.str(n.id, "", 100), text: h.str(n.text, "", 4000) })).filter((n) => {
       if (!/^[A-Za-z0-9_-]+$/.test(n.id) || !n.text || seen.has(n.id)) return false;
       seen.add(n.id); return true;
     });
-    return '<section class="' + bltCard(d) + '" aria-label="각주"><h3 class="blt-title">각주</h3>' + (notes.length ? "<ol>" + notes.map((n) => '<li id="fn-' + h.esc(n.id) + '" tabindex="-1">' + h.rich(n.text) + "</li>").join("") + "</ol>" : '<p class="blt-muted">각주를 넣으면 번호와 함께 표시돼요.</p>') + "</section>";
+    // Notes the text cites ([^id]) come first in citation order with that number and a ↩ back to the citation; the rest
+    // follow as before. With no citations (or outside a page) the list is exactly the old one.
+    const cited = h.page && h.page.footnotes instanceof Map ? h.page.footnotes : new Map();
+    const order = notes.filter((n) => cited.has(n.id)).sort((a, b) => cited.get(a.id) - cited.get(b.id)).concat(notes.filter((n) => !cited.has(n.id)));
+    const title = h.t("각주", "Notes");
+    return '<section class="' + bltCard(d) + '" aria-label="' + title + '">' + (h.titleShown(title) ? '<h3 class="blt-title">' + title + '</h3>' : "") + (order.length ? "<ol>" + order.map((n, i) => {
+      const num = cited.get(n.id);
+      const back = num ? ' <a class="blt-back" href="#fnref-' + h.esc(n.id) + '" aria-label="' + h.t("본문으로 돌아가기", "Back to text") + '">↩</a>' : "";
+      return '<li id="fn-' + h.esc(n.id) + '" tabindex="-1"' + (num && num !== i + 1 ? ' value="' + num + '"' : "") + ">" + h.rich(n.text) + back + "</li>";
+    }).join("") + "</ol>" : '<p class="blt-muted">각주를 넣으면 번호와 함께 표시돼요.</p>') + "</section>";
   },
 });
 

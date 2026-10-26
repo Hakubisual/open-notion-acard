@@ -17,6 +17,7 @@
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Acard - AI writes, people read"><meta name="twitter:description" content="An open-source workspace that turns the markdown your AI writes into tidy, Notion-like pages"><meta name="twitter:image" content="https://notes.example.com/og.png"><meta name="twitter:image:alt" content="Acard - AI writes. People read with ease.">
 
 <link rel="preload" href="/fonts/pretendard-core.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
 </head>
 <body>
@@ -27,10 +28,10 @@
       <a href="#features" data-i18n="land.nav.product">Product</a>
       <a href="#public" data-i18n="land.nav.public">Public pages</a>
       <a href="#pricing" data-i18n="land.nav.pricing">Pricing</a>
-      <a href="https://github.com/Hakubisual/open-notion-acard" rel="noopener">GitHub</a>
     </nav>
     <div class="nav-right">
-      <nav class="lang-switch" aria-label="Language" data-i18n-attr="aria-label:lang.label"><a href="?lang=en" data-lang="en" lang="en">EN</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></nav>
+      <a class="icon-link gh-link" href="https://github.com/Hakubisual/open-notion-acard" rel="noopener" aria-label="Acard on GitHub" title="Acard on GitHub" data-i18n-attr="aria-label:land.nav.github;title:land.nav.github"><svg class="ico" aria-hidden="true"><use href="/_site/nav-icons.svg#i-github"/></svg><span class="gh-stars" data-stars hidden><svg class="star" aria-hidden="true"><use href="/_site/nav-icons.svg#i-star"/></svg><b></b></span></a>
+      <details class="lang-menu"><summary aria-label="Language: English" data-i18n-attr="aria-label:lang.menu"><svg class="ico" aria-hidden="true"><use href="/_site/nav-icons.svg#i-globe"/></svg><span data-i18n="lang.current">English</span><svg class="chev" aria-hidden="true"><use href="/_site/nav-icons.svg#i-chevron"/></svg></summary><div class="lang-list"><a href="?lang=en" data-lang="en" lang="en">English</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></div></details>
       <a class="login-link" href="/login" data-i18n="land.nav.login">Log in</a>
       <a class="btn invite-link" href="/beta?from=landing" data-i18n="land.invite">I have an invite code</a>
       <a class="btn btn-primary d-only" href="/signup" data-i18n="land.nav.start">Start free</a>
@@ -42,37 +43,72 @@
     <a href="#features" data-i18n="land.nav.product">Product</a>
     <a href="#public" data-i18n="land.nav.public">Public pages</a>
     <a href="#pricing" data-i18n="land.nav.pricing">Pricing</a>
-    <a href="https://github.com/Hakubisual/open-notion-acard" rel="noopener">GitHub</a>
+    <a class="gh-link" href="https://github.com/Hakubisual/open-notion-acard" rel="noopener"><svg class="ico" aria-hidden="true"><use href="/_site/nav-icons.svg#i-github"/></svg>GitHub<span class="gh-stars" data-stars hidden><svg class="star" aria-hidden="true"><use href="/_site/nav-icons.svg#i-star"/></svg><b></b></span></a>
     <a href="/login" data-i18n="land.nav.login">Log in</a>
-    <nav class="lang-switch" aria-label="Language" data-i18n-attr="aria-label:lang.label"><a href="?lang=en" data-lang="en" lang="en">EN</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></nav>
+    <details class="lang-menu"><summary aria-label="Language: English" data-i18n-attr="aria-label:lang.menu"><svg class="ico" aria-hidden="true"><use href="/_site/nav-icons.svg#i-globe"/></svg><span data-i18n="lang.current">English</span><svg class="chev" aria-hidden="true"><use href="/_site/nav-icons.svg#i-chevron"/></svg></summary><div class="lang-list"><a href="?lang=en" data-lang="en" lang="en">English</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></div></details>
   </nav>
 </header>
 
 <main>
 <section class="hero">
-  <h1 data-i18n-html="land.hero.title">AI writes.<br>People read with ease.</h1>
-  <p data-i18n="meta.land.desc">A free app that turns the markdown your AI writes into tidy, Notion-like pages. Saved on your PC, published to the web only when you want.</p>
-  <div class="hero-cta">
-    <a class="btn btn-primary" href="/download" data-cta="download" data-i18n="land.hero.download">Download free</a>
-    <a class="btn" href="/beta?from=landing" data-i18n="land.invite">I have an invite code</a>
+  <div class="hero-copy">
+    <h1 data-i18n-html="land.hero.title">Paste what your AI wrote.<br>Get charts, boards and code.</h1>
+    <p class="hero-sub" data-i18n="land.hero.sub">Markdown from ChatGPT, Claude or Cursor becomes a page with charts, kanban boards, code and math. Free on your PC, no account needed.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="/signup" data-i18n="land.hero.start">Start free</a>
+      <a class="hero-example" data-ex="basic" href="https://notes.example.com/" rel="noopener" target="_blank" data-i18n="land.hero.example">See a real page →</a>
+    </div>
+    <p class="hero-app d-only"><a href="/download" data-cta="download" data-i18n="land.hero.app">Or download the free app for Windows and Mac</a></p>
+    <p class="hero-invite" hidden><a href="/beta?from=landing" data-i18n="land.invite">I have an invite code</a></p>
+    <ul class="hero-trust">
+      <li data-i18n="land.hero.trust1">Free app · saved on your PC as .md</li>
+      <li data-i18n="land.hero.trust3">Import from Notion and Obsidian</li>
+    </ul>
+  </div>
+  <div class="hero-demo" aria-hidden="true">
+    <div class="hd-in">
+      <div class="hd-bar"><i></i><i></i><i></i><span data-i18n="land.hero.demoIn">Markdown your AI wrote</span></div>
+      <pre class="hd-md"><code><span class="hd-h"># </span><span class="hd-h" data-i18n="land.hero.d.title">Weekend market plan</span>
+<span class="hd-h">## </span><span class="hd-h" data-i18n="land.hero.d.board">Board</span>
+- [ ] <span data-i18n="land.hero.d.t1">Book 12 stalls</span>
+- [ ] <span data-i18n="land.hero.d.t2">Design banner</span><span class="hd-more">
+<span class="hd-f">```acard-chart</span>
+<span class="hd-k">{ "type": "donut", ... }</span>
+<span class="hd-f">```</span></span></code></pre>
+    </div>
+    <span class="hd-arrow"></span>
+    <div class="hd-out">
+      <div class="hd-bar"><i></i><i></i><i></i><span data-i18n="land.hero.demoOut">The page in Acard</span></div>
+      <div class="hd-page">
+        <b class="hd-title" data-i18n="land.hero.d.title">Weekend market plan</b>
+        <div class="hd-kanban">
+          <div class="hd-col"><em data-i18n="land.hero.d.todo">To do</em><span data-i18n="land.hero.d.t1">Book 12 stalls</span><span data-i18n="land.hero.d.t2">Design banner</span></div>
+          <div class="hd-col hd-col-2"><em data-i18n="land.hero.d.doing">Doing</em><span data-i18n="land.hero.d.t4">Contact vendors</span></div>
+          <div class="hd-col hd-col-3"><em data-i18n="land.hero.d.done">Done</em><span data-i18n="land.hero.d.t3">Market research</span></div>
+        </div>
+        <div class="hd-chart"><i class="hd-donut"></i><ul><li data-i18n="land.hero.d.l1">Food 40%</li><li data-i18n="land.hero.d.l2">Handmade 30%</li><li data-i18n="land.hero.d.l3">Plants 20%</li><li data-i18n="land.hero.d.l4">Others 10%</li></ul></div>
+        <pre class="hd-code"><code><span class="hd-k">const</span> plan = { stalls: <span class="hd-n">12</span>, items: [<span class="hd-s">"food"</span>, <span class="hd-s">"crafts"</span>] }</code></pre>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="waitlist" id="waitlist" hidden>
   <div class="wl-card">
     <span class="wl-tag" data-i18n="wl.tag">Closed beta</span>
-    <h2 data-i18n="wl.title">Join the beta waitlist</h2>
-    <p class="wl-count" hidden data-i18n-html="wl.count"><b></b> people are waiting</p>
+    <h2 data-i18n="wl.title">Join the beta WAITLIST</h2>
+    <p class="wl-count" hidden data-i18n-html="wl.count"><b></b> people are on the WAITLIST</p>
     <p class="wl-sub" data-i18n="wl.sub">Acard is invite-only for now. Leave your email and we'll send invite codes in order.</p>
     <form class="wl-form" novalidate>
       <label><span data-i18n="wl.email">Email</span><input class="input" name="email" type="email" autocomplete="email" required></label>
       <label class="wl-hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
-      <button class="btn btn-primary btn-lg btn-block" type="submit" data-i18n="wl.submit">Join the waitlist</button>
+      <fieldset class="consent"><label class="consent-all"><input type="checkbox" data-consent-all><span data-i18n="consent.all">I agree to all required items below</span></label><div class="consent-item"><label><input type="checkbox" name="consent" value="privacy" required><span data-i18n="consent.privacy">[Required] I am 14 or older and agree to the collection and use of my personal information</span></label><details><summary data-i18n="consent.more">Details</summary><p data-i18n-html="consent.privacy.detail">Items: email (required), answers to optional questions (optional) · Purpose: managing your place on the WAITLIST, invitations and launch news · Kept: until you cancel, or one year after launch if you don't · You may refuse, but then you can't join. <a href="/privacy" target="_blank" rel="noopener">Full policy</a></p></details></div><div class="consent-item"><label><input type="checkbox" name="consent" value="overseas" required><span data-i18n="consent.overseas">[Required] I agree to the transfer of my personal information abroad</span></label><details><summary data-i18n="consent.more">Details</summary><p data-i18n-html="consent.overseas.detail">Supabase Pte. Ltd. (Singapore, privacy@supabase.com) - database storage · Cloudflare, Inc. (United States and others, privacyquestions@cloudflare.com) - running the site · Plus Five Five, Inc./Resend (United States, sending servers in Japan, support@resend.com) - invitation emails. Sent over an encrypted connection when you sign up and kept for the periods in the privacy policy. If you refuse, you can't sign up.</p></details></div></fieldset>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" data-i18n="wl.submit">Join the WAITLIST</button>
       <div class="msg" role="status"></div>
-      <p class="wl-fine" data-i18n-html="wl.fine">We use your email only for invite updates, as described in the <a href="/privacy">privacy policy</a>. Have a code? <a href="/beta">Enter it here</a>.</p>
+      <p class="wl-fine" data-i18n-html="wl.fine">Have a code? <a href="/beta">Enter it here</a>. Details are in the <a href="/privacy">privacy policy</a> and <a href="/terms">terms</a>.</p>
     </form>
     <div class="wl-done" hidden>
-      <p class="wl-num" data-i18n-html="wl.num">You're number <b></b> on the list</p>
+      <p class="wl-num" data-i18n-html="wl.num">You're number <b></b> on the WAITLIST</p>
       <p class="wl-sub wl-note"></p>
       <div class="wl-share"><input class="input" readonly aria-label="Share link" data-i18n-attr="aria-label:wl.shareLabel"><button class="btn" type="button" data-i18n="wl.copy">Copy link</button></div>
       <p class="wl-fine" data-i18n="wl.shareFine">When friends sign up with this link, you move up a little.</p>
@@ -167,28 +203,48 @@
   <div class="eyebrow" data-i18n="land.ex.eyebrow">Example pages</div>
   <h2 id="ex-title" data-i18n="land.ex.title">What a page looks like</h2>
   <p class="lead" data-i18n="land.ex.lead">Example pages written in Acard. Open one to see the real public page.</p>
+  <div class="ex-md">
+    <div class="ex-md-pane"><span class="ex-md-h" data-i18n="land.ex.mdWrite">Write this</span><pre class="ex-md-code"><code data-i18n="land.ex.mdCode">```acard-ui {"ui":"chart-donut"}
+{
+ "title": "Food stock at the start",
+ "items": [
+  { "label": "Rice &amp; noodles", "value": 58000 },
+  { "label": "Canned food", "value": 31000 },
+  { "label": "Bread &amp; rice cakes", "value": 22000 },
+  { "label": "Meat &amp; eggs", "value": 18000 },
+  { "label": "Snacks", "value": 12000 }
+ ],
+ "center": "141,000", "centerLabel": "kcal", "unit": "kcal"
+}
+```</code></pre></div>
+    <span class="ex-md-arrow" aria-hidden="true">→</span>
+    <div class="ex-md-pane"><span class="ex-md-h" data-i18n="land.ex.mdSee">See this</span><span class="ex-md-out"><picture data-ex-shot="md"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-basic-donut-dark.webp"><img src="/_site/showcase/ex-en-basic-donut-light.webp" width="1104" height="718" loading="lazy" decoding="async" alt="Donut chart drawn from the markdown" data-i18n-attr="alt:land.ex.mdAlt"></picture></span></div>
+  </div>
   <div class="ex-grid">
-    <a class="ex-card" data-ex="basic" href="https://notes.example.com/" rel="noopener" target="_blank">
+    <div class="ex-card" data-ex="basic">
       <span class="ex-tag" data-i18n="land.ex.basic">Everyday page</span>
-      <span class="ex-title" data-i18n="land.ex.basicLine" data-type>Launch prep weekly meeting</span>
-      <span class="ex-desc" data-i18n="land.ex.basicDesc">Number tiles, steps, a comparison and a decision box, all blocks.</span>
-      <span class="ex-shot"><picture data-ex-shot="basic"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-basic-dark.webp"><img src="/_site/showcase/ex-en-basic-light.webp" width="1040" height="1300" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
-      <span class="ex-open" data-i18n="land.ex.open">Open the real page →</span>
-    </a>
-    <a class="ex-card" data-ex="report" href="https://notes.example.com/" rel="noopener" target="_blank">
+      <span class="ex-title" data-i18n="land.ex.basicLine" data-type>72 hours snowed in: the Pine Ridge Lodge log</span>
+      <span class="ex-desc" data-i18n="land.ex.basicDesc">Three days, 24 people: firewood and food charts, a job board, a first-aid flow and a checklist.</span>
+      <span class="ex-stage"><picture class="on" data-ex-shot="basic"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-basic-kanban-dark.webp"><img src="/_site/showcase/ex-en-basic-kanban-light.webp" width="1104" height="822" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
+      <span class="ex-bar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="ex-chips" role="group" aria-label="Blocks in this page" data-i18n-attr="aria-label:land.ex.pick"><button type="button" class="ex-chip" data-frame="kanban" aria-pressed="true" data-i18n="land.ex.f.kanban">Board</button><button type="button" class="ex-chip" data-frame="stats" data-i18n="land.ex.f.stats">Stats</button><button type="button" class="ex-chip" data-frame="gauge" data-i18n="land.ex.f.gauge">Gauge</button><button type="button" class="ex-chip" data-frame="stacked" data-i18n="land.ex.f.stacked">Bars</button><button type="button" class="ex-chip" data-frame="timeline" data-i18n="land.ex.f.timeline">Timeline</button><button type="button" class="ex-chip" data-frame="donut" data-i18n="land.ex.f.donut">Donut</button></span>
+      <a class="ex-open" data-ex="basic" href="https://notes.example.com/" rel="noopener" target="_blank" data-i18n="land.ex.open">Open the real page →</a>
+    </div>
+    <div class="ex-card" data-ex="report">
       <span class="ex-tag" data-i18n="land.ex.report">Research report</span>
-      <span class="ex-title" data-i18n="land.ex.reportLine" data-type>How soon should you drink fresh coffee?</span>
-      <span class="ex-desc" data-i18n="land.ex.reportDesc">Research report style: numbered equations, tables and sources.</span>
-      <span class="ex-shot"><picture data-ex-shot="report"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-report-dark.webp"><img src="/_site/showcase/ex-en-report-light.webp" width="1040" height="1300" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
-      <span class="ex-open" data-i18n="land.ex.open">Open the real page →</span>
-    </a>
-    <a class="ex-card" data-ex="blog" href="https://notes.example.com/" rel="noopener" target="_blank">
+      <span class="ex-title" data-i18n="land.ex.reportLine" data-type>Does pressing the elevator button again help?</span>
+      <span class="ex-desc" data-i18n="land.ex.reportDesc">A 1,200-call study: numbered equations, box plots, a heatmap, footnotes and references.</span>
+      <span class="ex-stage"><picture class="on" data-ex-shot="report"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-report-boxplot-dark.webp"><img src="/_site/showcase/ex-en-report-boxplot-light.webp" width="1104" height="1092" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
+      <span class="ex-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="ex-chips" role="group" aria-label="Blocks in this page" data-i18n-attr="aria-label:land.ex.pick"><button type="button" class="ex-chip" data-frame="boxplot" aria-pressed="true" data-i18n="land.ex.f.boxplot">Box plot</button><button type="button" class="ex-chip" data-frame="heatmap" data-i18n="land.ex.f.heatmap">Heatmap</button><button type="button" class="ex-chip" data-frame="histogram" data-i18n="land.ex.f.histogram">Histogram</button><button type="button" class="ex-chip" data-frame="equation" data-i18n="land.ex.f.equation">Equation</button></span>
+      <a class="ex-open" data-ex="report" href="https://notes.example.com/" rel="noopener" target="_blank" data-i18n="land.ex.open">Open the real page →</a>
+    </div>
+    <div class="ex-card" data-ex="blog">
       <span class="ex-tag" data-i18n="land.ex.blog">Blog post</span>
-      <span class="ex-title" data-i18n="land.ex.blogLine" data-type>Notes that make a small team faster</span>
-      <span class="ex-desc" data-i18n="land.ex.blogDesc">A public post anyone can read from one link, with a table of contents.</span>
-      <span class="ex-shot"><picture data-ex-shot="blog"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-blog-dark.webp"><img src="/_site/showcase/ex-en-blog-light.webp" width="1040" height="1300" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
-      <span class="ex-open" data-i18n="land.ex.open">Open the real page →</span>
-    </a>
+      <span class="ex-title" data-i18n="land.ex.blogLine" data-type>The satellite that went quiet for 41 days</span>
+      <span class="ex-desc" data-i18n="land.ex.blogDesc">A student cubesat rescue: signal charts, decoder code, photos and a table of contents.</span>
+      <span class="ex-stage"><picture class="on" data-ex-shot="blog"><source media="(prefers-color-scheme: dark)" srcset="/_site/showcase/ex-en-blog-code-dark.webp"><img src="/_site/showcase/ex-en-blog-code-light.webp" width="1104" height="1052" loading="lazy" decoding="async" alt="Example page screenshot" data-i18n-attr="alt:land.ex.alt"></picture></span>
+      <span class="ex-bar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span class="ex-chips" role="group" aria-label="Blocks in this page" data-i18n-attr="aria-label:land.ex.pick"><button type="button" class="ex-chip" data-frame="code" aria-pressed="true" data-i18n="land.ex.f.code">Code</button><button type="button" class="ex-chip" data-frame="cycle" data-i18n="land.ex.f.cycle">Cycle</button><button type="button" class="ex-chip" data-frame="funnel" data-i18n="land.ex.f.funnel">Funnel</button><button type="button" class="ex-chip" data-frame="line" data-i18n="land.ex.f.line">Line chart</button><button type="button" class="ex-chip" data-frame="stepper" data-i18n="land.ex.f.stepper">Stepper</button></span>
+      <a class="ex-open" data-ex="blog" href="https://notes.example.com/" rel="noopener" target="_blank" data-i18n="land.ex.open">Open the real page →</a>
+    </div>
   </div>
 </section>
 
@@ -212,10 +268,10 @@
   <p class="lead" data-i18n="land.price.lead">The app is free. Subscribe only when you need web publishing, backup and sync.</p>
   <div class="pr-grid">
     <div class="pr-card">
-      <div class="pr-head"><h3 data-i18n="land.price.web">Web publishing &amp; backup</h3><span class="pill pill-accent" data-i18n="land.price.expected">Expected price</span><span class="pill" data-i18n="land.price.beta">Beta</span></div>
+      <div class="pr-head"><h3 data-i18n="land.price.web">PRO</h3><span class="pill pill-accent" data-i18n="land.price.expected">Expected price</span><span class="pill" data-i18n="land.price.beta">Beta</span></div>
       <div class="price" data-i18n="land.price.webPrice">Optional</div>
       <p class="pr-note" data-i18n="land.price.betaNote">Acard is in beta, so this price is not final. No payments are taken yet.</p>
-      <ul class="plan-list" data-i18n-html="land.price.webList"><li>Publish to the web, no page limit</li><li>Cloud backups: 30 days + 12 months</li><li>Sync between your computers</li><li>10 GB for files and backups</li></ul>
+      <ul class="plan-list" data-i18n-html="land.price.webList"><li>Publish to the web, no page limit</li><li>Cloud backups: 30 days + 12 months</li><li>Sync between your computers</li></ul>
       <p class="pr-app" data-i18n="land.price.appLine">The Acard app is free · saved on your PC · connects to your AI agents</p>
       <div class="pr-cta"><a class="btn" href="/download" data-cta="download" data-i18n="land.price.download">Download free</a><a class="btn btn-primary" href="/signup" data-cta="subscribe" data-i18n="land.price.subscribe">Subscribe</a></div>
     </div>
@@ -241,7 +297,7 @@
 </footer>
 </div>
 <div class="m-only m-tail">
-  <nav class="lang-switch" aria-label="Language" data-i18n-attr="aria-label:lang.label"><a href="?lang=en" data-lang="en" lang="en">EN</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></nav>
+  <details class="lang-menu"><summary aria-label="Language: English" data-i18n-attr="aria-label:lang.menu"><svg class="ico" aria-hidden="true"><use href="/_site/nav-icons.svg#i-globe"/></svg><span data-i18n="lang.current">English</span><svg class="chev" aria-hidden="true"><use href="/_site/nav-icons.svg#i-chevron"/></svg></summary><div class="lang-list"><a href="?lang=en" data-lang="en" lang="en">English</a><a href="?lang=ko" data-lang="ko" lang="ko">한국어</a><a href="?lang=zh" data-lang="zh" lang="zh-CN">中文</a></div></details>
   <div class="m-foot">© 2026 Acard · <a href="/terms" data-i18n="common.terms">Terms</a> · <a href="/privacy" data-i18n="common.privacy">Privacy</a></div>
 </div>
 </main>

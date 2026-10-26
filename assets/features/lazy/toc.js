@@ -30,16 +30,12 @@
     summary.textContent = "목차";
     details.appendChild(summary);
     var list = document.createElement("ol");
-    headings.forEach(function (heading, index) {
-      var item = document.createElement("li"), link = document.createElement("a"), number = document.createElement("span"), label = document.createElement("span");
+    headings.forEach(function (heading) {
+      var item = document.createElement("li"), link = document.createElement("a"), label = document.createElement("span");
       item.className = "l" + heading.tagName.slice(1);
       link.href = "#" + encodeURIComponent(heading.id);
-      number.className = "n";
-      number.textContent = String(index + 1);
-      number.setAttribute("aria-hidden", "true");
       label.className = "reader-toc-label";
       label.textContent = heading.textContent.trim();
-      link.appendChild(number);
       link.appendChild(label);
       // Hash navigation stays native; reveal headings nested in closed toggles first.
       link.addEventListener("click", function (event) {

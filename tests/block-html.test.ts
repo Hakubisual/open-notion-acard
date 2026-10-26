@@ -205,6 +205,47 @@ describe("navTree", () => {
   });
 });
 
+// acard-footnote-fix (owner: "각주가 실제 각주가 아니고 참고문헌 타이틀 중복", slack C0C91GZDVC7 1792923864.529159)
+describe("footnotes", () => {
+  const notes = (ids: string[]) => ({ id: "fn", type: "component", text: JSON.stringify({ notes: ids.map((id) => ({ id, text: "주석 " + id })) }), meta: { ui: "block-footnotes" } });
+
+  test("[^id] in text links to its note, numbered in citation order, and the note links back", () => {
+    const html = renderBlocks([
+      { id: "p1", type: "paragraph", text: "first[^b] then[^a]" },
+      { id: "p2", type: "bulleted", text: "again[^b], `[^a]` in code, unknown[^zz]" },
+      notes(["a", "b", "c"]),
+    ], { pages: [] });
+    expect(html).toContain('first<sup class="fnref"><a href="#fn-b" id="fnref-b">1</a></sup> then<sup class="fnref"><a href="#fn-a" id="fnref-a">2</a></sup>');
+    expect(html).toContain('again<sup class="fnref"><a href="#fn-b">1</a></sup>');
+    expect(html).toContain("<code>[^a]</code>");
+    expect(html).toContain("unknown[^zz]");
+    const list = html.slice(html.indexOf("<ol>"));
+    expect(html.match(/\.fnref\{/g)?.length).toBe(1);
+    expect([...list.matchAll(/<li id="fn-(\w+)"/g)].map((m) => m[1])).toEqual(["b", "a", "c"]);
+    expect(list).toContain('주석 b <a class="blt-back" href="#fnref-b"');
+    expect(list).not.toContain('href="#fnref-c"');
+    expect(html.match(/\.fnref\{/g)).toHaveLength(1);
+  });
+
+  test("a page with a footnotes block but no [^id] draws the list exactly as before", () => {
+    const html = renderBlocks([notes(["2", "1"])], { pages: [] });
+    expect(html).toContain('<h3 class="blt-title">각주</h3><ol><li id="fn-2" tabindex="-1">주석 2</li><li id="fn-1" tabindex="-1">주석 1</li></ol>');
+    expect(html).not.toContain("fnref");
+    expect(renderBlocks([{ id: "p1", type: "paragraph", text: "no notes block[^1]" }])).toBe('<span id="block-p1"></span>\n<p>no notes block[^1]</p>');
+  });
+
+  test("a heading with the same words right above a references or footnotes block keeps the only title", () => {
+    const refs = { id: "r", type: "component", text: JSON.stringify({ references: [{ authors: "김민서", year: 2024, title: "디지털 노트" }] }), meta: { ui: "block-references" } };
+    const under = renderBlocks([{ id: "h", type: "heading1", text: "참고문헌" }, refs]);
+    expect(under).toContain('<h2 id="참고문헌">참고문헌</h2>');
+    expect(under).not.toContain('class="bld-title"');
+    expect(renderBlocks([{ id: "h", type: "heading1", text: "6. 참고문헌" }, refs])).not.toContain('class="bld-title"');
+    expect(renderBlocks([{ id: "h", type: "heading1", text: "출처" }, refs])).toContain('<div class="bld-title">참고문헌</div>');
+    expect(renderBlocks([{ id: "h", type: "heading1", text: "참고문헌" }, { id: "p", type: "paragraph", text: "설명" }, refs])).toContain('<div class="bld-title">참고문헌</div>');
+    expect(renderBlocks([{ id: "h", type: "heading1", text: "각주" }, notes(["1"])])).not.toContain('class="blt-title"');
+  });
+});
+
 describe("worker renderer", () => {
   test("빌드가 만든 워커와 같은 렌더러를 쓴다", () => {
     const source = readFileSync(join(ROOT, "gate", "_worker.js"), "utf8");

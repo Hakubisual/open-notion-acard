@@ -49,6 +49,26 @@ describe("golden round trip: block types", () => {
   for (const [name, md] of Object.entries(BLOCKS)) golden(name, md);
 });
 
+for (const type of ["bulleted", "numbered"] as const) for (const open of [false, true]) {
+  test(`${type} list fold ${open}: metadata round trip preserves descendants and reader HTML`, () => {
+    const first = [
+      { id: "parent", type, text: "Parent", indent: 0, meta: { open } },
+      { id: "child", type: "numbered" as const, text: "Child", indent: 1, meta: { open: false } },
+      { id: "grandchild", type: "paragraph" as const, text: "Grandchild", indent: 2 },
+      { id: "sibling", type, text: "Sibling", indent: 0 },
+    ];
+    const markdown = blocksToMarkdown(first, { meta: true });
+    expect(markdown).toBe(`${type === "numbered" ? "1." : "-"} Parent\n<!--acard {"open":${open}}-->\n\n  1. Child\n  <!--acard {"open":false}-->\n\n    Grandchild\n\n${type === "numbered" ? "2." : "-"} Sibling`);
+    const again = markdownToBlocks(markdown, { meta: true }).map((block, i) => ({ ...block, id: first[i].id }));
+    expect(shape(again)).toEqual(shape(first));
+    expect(blocksToMarkdown(again, { meta: true })).toBe(markdown);
+    expect(html(again)).toBe(html(first));
+    const document = acardMetaDocument(acardMarkdown("Folded lists", first));
+    expect(shape(markdownToBlocks(document.body, { meta: true }))).toEqual(shape(first));
+    expect(blocksToMarkdown(first)).not.toContain("<!--acard");
+  });
+}
+
 describe("golden round trip: every registered component", () => {
   test("the registry is not empty", () => expect(listComponents().length).toBeGreaterThanOrEqual(11));
   for (const c of listComponents()) {

@@ -47,8 +47,10 @@
     var isBox = function (v) { return /^\[( |x|X)?\]$/.test(String(v == null ? "" : v).trim()); };
     var first = cols[0];
     if (rows.length && rows.every(function (r) { return isBox(Array.isArray(r) ? r[0] : r[first]); })) return "0";
-    var name = "완료", n = 2;
-    while (cols.indexOf(name) >= 0) name = "완료 " + n++;
+    // issue 147: the new column is data, named in the UI language it is made in.
+    var done = window.AcardLang ? window.AcardLang.text("완료") : "완료";
+    var name = done, n = 2;
+    while (cols.indexOf(name) >= 0) name = done + " " + n++;
     cols.unshift(name);
     rows.forEach(function (r) { if (Array.isArray(r)) r.unshift("[ ]"); else r[name] = "[ ]"; });
     if (Array.isArray(meta.widths)) meta.widths.unshift(0);

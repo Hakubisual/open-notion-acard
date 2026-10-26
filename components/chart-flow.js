@@ -36,7 +36,7 @@ function chflHeatmap(d, h, W, H) {
   const lo = Math.min(...valid), hi = Math.max(...valid);
   const left = Math.min(W * 0.28, Math.max(36, ...rows.map((s) => C.textW(s, 12) + 20)));
   const top = 36, bottom = H - 32, cw = (W - left - 8) / cols.length, rh = (bottom - top) / rows.length;
-  let body = C.text(W - 174, 13, "적음", 11, { cls: "vk-tick" }) + C.text(W - 4, 13, "많음", 11, { anchor: "end", cls: "vk-tick" });
+  let body = C.text(W - 174, 13, h.t("적음", "Low"), 11, { cls: "vk-tick" }) + C.text(W - 4, 13, h.t("많음", "High"), 11, { anchor: "end", cls: "vk-tick" });
   for (let s = 0; s < 6; s += 1) body += chflRect(C, W - 144 + s * 18, 5, 15, 16, chflHeatFill(C, pal, s), C.fmt(lo + (hi - lo) * s / 5, unit), "chfl-key");
   const every = Math.max(1, Math.ceil(38 / cw));
   cols.forEach((col, j) => { if (j % every === 0) body += '<g><title>' + C.esc(col) + '</title>' + C.text(left + cw * (j + 0.5), H - 14, chflFit(C, col, cw * every - 6, 12), 12, { anchor: "middle", cls: "vk-tick" }) + '</g>'; });

@@ -11,6 +11,8 @@ export function route(request, origin) {
   if (path === "/api/tree" || path === "/api/folders/tree") return { kind: "tree", key };
   const api = /^\/api\/page\/([^/]+)$/.exec(path);
   if (api) return { kind: "page", slug: api[1], key };
+  const edit = /^\/edit\/([^/.]+)\/$/.exec(path);
+  if (edit) return { kind: "editor", slug: edit[1], key };
   if (path === "/") return { kind: "html", slug: "index", key };
   const page = /^\/([^/.]+)\/$/.exec(path);
   if (page && !/^(api|edit|print|media|agents)$/.test(page[1])) {
@@ -69,7 +71,7 @@ export function bounded(work, fallback, ms = CACHE_STEP_MS) {
 // Top-level scripts and styles a cached HTML page needs (the precached shell; lazy chunks load on demand). Offline, a page is shown only when all of them are cached,
 // so an old shell never loads with its scripts missing.
 export function shellRefs(html) {
-  return [...html.matchAll(/<(?:script|link)\b[^>]*?(?:src|href)=["'](\/[\w.-]+\.(?:js|css)\?v=[^"']+)["']/gi)].map(m => m[1]);
+  return [...html.matchAll(/<(?:script|link)\b[^>]*?(?:src|href)=["'](\/[\w./-]+\.(?:js|css)\?v=[^"']+)["']/gi)].map(m => m[1]);
 }
 
 async function syncImported(response) {
@@ -81,6 +83,7 @@ async function syncImported(response) {
 
 export function createOfflineWorker(platform, config) {
   const { caches, origin } = platform;
+  const assets = config.shell.concat(config.lazy || []);
   const nameFor = (kind, id) => "acard-" + kind + "-" + config.version + "-" + id;
   const orderKey = origin + "/__offline_lru";
   const clients = new Map();
@@ -120,7 +123,7 @@ export function createOfflineWorker(platform, config) {
     const url = new URL(request.url), path = url.pathname;
     // The reader's ?acard-revalidate refresh is not routed (never cached) but is still a private page read.
     const reader = route(request, origin) || url.searchParams.has("acard-revalidate");
-    const privateRequest = reader || /^\/(?:api|edit)\//.test(path) || request.mode === "navigate" || config.shell.includes(path + url.search);
+    const privateRequest = reader || /^\/(?:api|edit)\//.test(path) || request.mode === "navigate" || assets.includes(path + url.search);
     // Credentialless manifest/icon failures do not describe the member session.
     if (response.status === 401 && privateRequest && request.credentials !== "omit") {
       await bounded(wipe(), undefined);
@@ -152,7 +155,7 @@ export function createOfflineWorker(platform, config) {
       const response = await platform.fetch(request);
       if (!(await observe(response, request, epoch, clientId))) return;
       if (!owns(id, epoch, clientId)) { tell({ type: "acard-auth" }); return; }
-      if (!shouldCache(request, response, origin, config.shell)) {
+      if (!shouldCache(request, response, origin, assets)) {
         await serial(async () => {
           if (owns(id, epoch, clientId) && await caches.has(nameFor("pages", id))) await (await caches.open(nameFor("pages", id))).delete(info.key);
         });
@@ -208,13 +211,17 @@ export function createOfflineWorker(platform, config) {
         await bounded(serial(async () => {
           if (!(await caches.has(pagesName))) return;
           const cache = await caches.open(pagesName);
-          for (const key of await cache.keys()) if (route(key, origin)?.kind !== "page") await cache.delete(key);
+          const pageSave = /^(PUT|PATCH)$/.test(request.method) && /^\/api\/page\/[^/]+(?:\/blocks)?$/.test(url.pathname);
+          for (const key of await cache.keys()) {
+            const kind = route(key, origin)?.kind;
+            if (kind !== "page" && !(pageSave && kind === "editor")) await cache.delete(key);
+          }
         }), undefined);
       }
       return response;
     }
     const info = route(request, origin);
-    const shell = request.method === "GET" && config.shell.includes(url.pathname + url.search);
+    const shell = request.method === "GET" && assets.includes(url.pathname + url.search);
     // The readable acard_id cookie names the session the browser will actually send. If it differs from the identity
     // this worker remembers (a session changed by a route the worker never saw), switch to it before touching a cache.
     // undefined = the platform cannot read cookies; null = no identity cookie, so nothing private is served from cache.
@@ -231,7 +238,7 @@ export function createOfflineWorker(platform, config) {
       const cache = await caches.open(name);
       const hit = await cache.match(info ? info.key : request);
       if (!hit || (info && hit.headers.get("x-acard-id") !== id)) return null;
-      if (info?.kind === "html") {
+      if (info?.kind === "html" || info?.kind === "editor") {
         const refs = shellRefs(await hit.clone().text());
         const assets = refs.length && await caches.has(shellName) ? await caches.open(shellName) : null;
         for (const ref of refs) if (!assets || !(await assets.match(origin + ref))) return null;
@@ -241,7 +248,7 @@ export function createOfflineWorker(platform, config) {
       return owns(id, epoch, clientId) ? hit : null;
     }
     // Only a known member client can use SWR. Page JSON and editor documents stay network-first.
-    if (info && info.kind !== "page" && waitUntil && member(id)) {
+    if (info && info.kind !== "page" && info.kind !== "editor" && waitUntil && member(id)) {
       const hit = await bounded(serial(readCached), null);
       if (hit) {
         const text = await hit.clone().text();
@@ -266,7 +273,7 @@ export function createOfflineWorker(platform, config) {
     const observed = await observe(response, request, epoch, clientId);
     const nextId = clients.get(clientId), nextEpoch = generation;
     if (observed && resultingClientId) clients.set(resultingClientId, nextId);
-    if (observed && owns(nextId, nextEpoch, clientId) && shouldCache(request, response, origin, config.shell)) {
+    if (observed && owns(nextId, nextEpoch, clientId) && shouldCache(request, response, origin, assets)) {
       // The page gets its response now; the offline copy is written behind it.
       const copy = response.clone();
       const stored = later(waitUntil, serial(async () => {

@@ -33,7 +33,14 @@
     if (getComponent(id) || !m || !editor) return Promise.resolve(getComponent(id));
     return (m.core ? load(m.core) : Promise.resolve()).then(function () { return load(m.chunk); }).then(function () { return getComponent(id); });
   }
-  window.AcardComponents = { registerComponent: registerComponent, registerHelpers: registerHelpers, registerFamilyCss: registerFamilyCss, UI_TONES: UI_TONES, getComponent: getComponent, listComponents: listComponents, componentCatalog: componentCatalog, componentMarkdown: componentMarkdown, componentData: componentData, renderComponentBlock: renderComponentBlock, fallbackCardHtml: fallbackCardHtml, componentCss: componentCss, ensure: ensure, familyLoaded: paint };
+  // What the reader knows around a block (footnote numbers from the page's [^id] marks, the heading right above), so the
+  // editor preview numbers notes and hides a repeated title the way the page will.
+  function pageOf(block) {
+    var list = (editor && editor.state && editor.state.blocks) || [];
+    var i = list.indexOf(block), prev = i > 0 ? list[i - 1] : null;
+    return { footnotes: footnoteOrder(list), heading: prev && /^heading[1-4]$/.test(prev.type) && (prev.indent || 0) === (block.indent || 0) ? String(prev.text || "") : "" };
+  }
+  window.AcardComponents = { pageOf: pageOf, registerComponent: registerComponent, registerHelpers: registerHelpers, registerFamilyCss: registerFamilyCss, UI_TONES: UI_TONES, getComponent: getComponent, listComponents: listComponents, componentCatalog: componentCatalog, componentMarkdown: componentMarkdown, componentData: componentData, renderComponentBlock: renderComponentBlock, fallbackCardHtml: fallbackCardHtml, componentCss: componentCss, ensure: ensure, familyLoaded: paint };
   paint();
   document.head.appendChild(style);
 
@@ -83,7 +90,7 @@
     hint.className = "ui-editor-hint";
     var timer = 0;
     function draw() {
-      preview.innerHTML = renderComponentBlock(block);
+      preview.innerHTML = renderComponentBlock(block, pageOf(block));
       var bad = preview.querySelector("[data-ui-invalid]");
       hint.textContent = !comp ? "모르는 컴포넌트예요. 이름(ui)을 확인해 주세요." : bad ? "JSON 형식이 맞지 않아 기본값으로 보여 주고 있어요." : "값을 고치면 바로 다시 그려져요.";
     }

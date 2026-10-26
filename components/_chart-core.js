@@ -110,7 +110,7 @@ function chcFigure(kind, d, h, part) {
       '<title id="' + uid + '-st">' + chcEsc(label) + '</title><desc id="' + uid + '-sd">' + chcEsc(part.desc || "") + "</desc>" + part.body + "</svg>" +
       (part.narrow ? '<svg class="vk-svg vk-narrow" viewBox="0 0 ' + part.narrow.w + " " + part.narrow.h + '" aria-hidden="true">' + part.narrow.body + "</svg>" : "");
   const foot = figure || caption || source ? '<figcaption class="vk-cap">' + (figure ? '<span class="vk-fignum">' + (title ? chcEsc(title) : "") + "</span>" : "") +
-    (caption ? '<span class="vk-note">' + h.rich(caption) + "</span>" : "") + (source ? '<span class="vk-src">출처: ' + h.rich(source) + "</span>" : "") + "</figcaption>" : "";
+    (caption ? '<span class="vk-note">' + h.rich(caption) + "</span>" : "") + (source ? '<span class="vk-src">' + (h.en ? "Source: " : "출처: ") + h.rich(source) + "</span>" : "") + "</figcaption>" : "";
   return '<figure class="vk-fig vk-' + kind + " vk-h-" + size + (figure ? " vk-numbered" : "") + (d.compact === true ? " vk-compact" : "") + '" role="group"' +
     (title ? ' aria-labelledby="' + uid + '-t"' : ' aria-label="' + chcEsc(label) + '"') + ">" + head + '<div class="vk-plot">' + (part.before || "") + svg + "</div>" + (part.empty ? "" : part.table || "") + foot + "</figure>";
 }
@@ -194,7 +194,7 @@ registerFamilyCss("chart",
   ".vk-svg text{font-family:inherit}.vk-tick{fill:var(--color-text-dim)}.vk-axis-title{fill:var(--color-text-dim)}.vk-val{fill:var(--color-text);font-weight:600}" +
   ".vk-grid{stroke:var(--viz-grid);stroke-width:1}.vk-base{stroke:var(--viz-axis);stroke-width:1}" +
   ".vk-cap{display:flex;flex-wrap:wrap;gap:2px var(--space-2);margin-top:var(--space-3);color:var(--color-text-dim);font-size:var(--fs-13)}" +
-  ".vk-numbered .vk-fignum::before{content:'그림. ';font-weight:650;color:var(--color-text)}.rp .vk-numbered .vk-fignum::before{content:none}.rp .vk-numbered .vk-cap::before{font-weight:600}" +
+  ".vk-numbered .vk-fignum::before{content:'그림. ';font-weight:650;color:var(--color-text)}.vk-numbered:lang(en) .vk-fignum::before{content:'Figure. '}.rp .vk-numbered .vk-fignum::before{content:none}.rp .vk-numbered .vk-cap::before{font-weight:600}" +
   ".vk-src{color:var(--color-text-dim)}.vk-empty{margin:0;padding:var(--space-6) var(--space-4);border:1px dashed var(--color-border);border-radius:var(--radius-sm);text-align:center;color:var(--color-text-dim);font-size:var(--fs-14)}" +
   ".vk-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}" +
   "[data-preset=paper] .vk-fig{box-shadow:none;border-color:var(--viz-ink-4)}[data-preset=paper] .vk-title{font-family:var(--font-serif)}[data-preset=showcase] .vk-fig{padding:var(--space-6);border-radius:var(--radius-lg)}" +

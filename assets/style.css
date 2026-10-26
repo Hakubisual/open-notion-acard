@@ -199,7 +199,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
 .math .mtext { font-style: normal; }
 .math .mbf { font-weight: 700; }
 .math .munk { color: var(--color-danger-fg); font-size: .8em; font-style: normal; }
-:is(#main,.sv-wrap):not(.full-width,.width-normal,.wide,.sv-normal,.sv-full) .blocks>:is(p,ul,ol,blockquote,h2,h3,h4,h5,.callout,.todo,details){max-width:var(--content-width)}
 .blocks:has(>.cols){container-type:inline-size}
 @container (max-width:1007px){.blocks .cols4{grid-template-columns:1fr 1fr}}
 @container (max-width:751px){.blocks :is(.cols3,.cols4){grid-template-columns:1fr}}

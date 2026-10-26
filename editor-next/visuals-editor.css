@@ -1,11 +1,11 @@
 .acv-editor{border:1px solid var(--line,#e5e3ef);border-radius:10px;padding:10px;background:var(--bg-soft,#faf9ff)}
 .acv-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:12px;align-items:start}
-@media (max-width:720px){.acv-grid{grid-template-columns:1fr}}
+@media (max-width:720px){.acv-grid{grid-template-columns:minmax(0,1fr)}}
 .acv-source{width:100%;box-sizing:border-box;font:var(--fs-13)/1.5 ui-monospace,Consolas,monospace;border:1px solid var(--line,#e5e3ef);border-radius:8px;padding:8px;resize:vertical;background:var(--bg,#fff);color:inherit}
 .acv-hint{margin:4px 0 8px;font-size:var(--fs-12);opacity:.7}
 .acv-fields{display:grid;gap:6px}
-.acv-field{display:grid;grid-template-columns:4.5em 1fr;align-items:center;gap:6px;font-size:var(--fs-13)}
-.acv-field input{min-height:32px;border:1px solid var(--line,#e5e3ef);border-radius:6px;padding:4px 8px;background:var(--bg,#fff);color:inherit}
+.acv-field{display:grid;grid-template-columns:4.5em minmax(0,1fr);align-items:center;gap:6px;font-size:var(--fs-13)}
+.acv-field input{min-width:0;min-height:32px;border:1px solid var(--line,#e5e3ef);border-radius:6px;padding:4px 8px;background:var(--bg,#fff);color:inherit}
 .acv-preview{min-width:0;overflow:auto}
 .acv-preview .acv-fig{margin:0!important}
 .acv-fail pre{white-space:pre-wrap;font-size:var(--fs-12)}

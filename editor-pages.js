@@ -53,12 +53,14 @@ async function snapshotPage(db, slug) {
   return { page, blocks: blocks.results ?? [], links: links.results ?? [], settings };
 }
 
-function versionInsert(db, slug, snapshot) {
+function versionInsert(db, slug, snapshot, claim = false) {
   const version = { id: crypto.randomUUID(), page: slug, title: snapshot.page.title, created: Date.now() };
   return {
     version,
-    statement: db.prepare("INSERT INTO editor_history (id, page, title, created, snapshot) VALUES (?, ?, ?, ?, ?)")
-      .bind(version.id, slug, version.title, version.created, JSON.stringify(snapshot)),
+    statement: db.prepare("INSERT INTO editor_history (id, page, title, created, snapshot) " + (claim
+      ? "SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pages WHERE slug = ? AND updated = ? AND hash IS ?) AND NOT EXISTS (SELECT 1 FROM editor_trash WHERE page = ?)"
+      : "VALUES (?, ?, ?, ?, ?)"))
+      .bind(version.id, slug, version.title, version.created, JSON.stringify(snapshot), ...(claim ? [slug, snapshot.page.updated, snapshot.page.hash, slug] : [])),
   };
 }
 
@@ -117,24 +119,28 @@ function settingsPatch(body) {
 }
 
 // Rows originate in this database, not in a request. Keep extension columns and opaque JSON.
-function insertRow(db, table, row) {
+function insertRow(db, table, row, guard) {
   const keys = Object.keys(row);
   const columns = keys.map((key) => '"' + key.replaceAll('"', '""') + '"').join(", ");
-  return db.prepare(`INSERT INTO ${table} (${columns}) VALUES (${keys.map(() => "?").join(", ")})`).bind(...keys.map((key) => row[key]));
+  const values = keys.map(() => "?").join(", ");
+  return db.prepare(`INSERT INTO ${table} (${columns}) ` + (guard ? `SELECT ${values} WHERE ${guard.sql}` : `VALUES (${values})`))
+    .bind(...keys.map((key) => row[key]), ...(guard ? guard.binds : []));
 }
 
 function settingsRow(slug, settings) {
   return { ...settings, page: slug, favorite: settings.favorite ? 1 : 0, ...("small" in settings ? { small: settings.small ? 1 : 0 } : {}) };
 }
 
-function replaceContent(db, slug, snapshot) {
+function replaceContent(db, slug, snapshot, guard) {
+  const condition = guard ? " AND " + guard.sql : "";
+  const binds = guard ? guard.binds : [];
   return [
-    db.prepare("DELETE FROM blocks WHERE page = ?").bind(slug),
-    ...snapshot.blocks.map((block) => insertRow(db, "blocks", { ...block, page: slug })),
-    db.prepare("DELETE FROM links WHERE src = ?").bind(slug),
-    ...snapshot.links.map((link) => insertRow(db, "links", { ...link, src: slug })),
-    db.prepare("DELETE FROM editor_page_settings WHERE page = ?").bind(slug),
-    insertRow(db, "editor_page_settings", settingsRow(slug, snapshot.settings)),
+    db.prepare("DELETE FROM blocks WHERE page = ?" + condition).bind(slug, ...binds),
+    ...snapshot.blocks.map((block) => insertRow(db, "blocks", { ...block, page: slug }, guard)),
+    db.prepare("DELETE FROM links WHERE src = ?" + condition).bind(slug, ...binds),
+    ...snapshot.links.map((link) => insertRow(db, "links", { ...link, src: slug }, guard)),
+    db.prepare("DELETE FROM editor_page_settings WHERE page = ?" + condition).bind(slug, ...binds),
+    insertRow(db, "editor_page_settings", settingsRow(slug, snapshot.settings), guard),
   ];
 }
 
@@ -167,6 +173,7 @@ export async function handleEditorApi(request, db, url, helpers) {
         const name = textValue(body.name, "template name", 200);
         const snapshot = await snapshotPage(db, slug);
         if (!snapshot || (await readEditorPageMeta(db, slug)).trashed) return json({ error: "Page not found." }, 404);
+        if (helpers.guardSyncedWrite) helpers.guardSyncedWrite(snapshot.blocks, slug, snapshot.blocks);
         const template = { id: crypto.randomUUID(), name, created: Date.now() };
         await db.prepare("INSERT INTO editor_templates (id, name, created, snapshot) VALUES (?, ?, ?, ?)").bind(template.id, name, template.created, JSON.stringify(snapshot)).run();
         return json({ template }, 201);
@@ -244,18 +251,29 @@ export async function handleEditorApi(request, db, url, helpers) {
       }
       if (!row) return json({ error: "Snapshot not found." }, 404);
       const snapshot = JSON.parse(row.snapshot);
+      if (snapshot.syncedOperation) return json({ error: "synced_receipt_requires_versions" }, 400);
       const now = await snapshotPage(db, slug);
-      const { statement, version } = versionInsert(db, slug, now);
-      const restored = { ...snapshot.page, updated: Date.now(), source: "editor", hash: null };
+      if (helpers.guardSyncedWrite) helpers.guardSyncedWrite(snapshot.blocks, slug, now.blocks);
+      // Untagged snapshots also predate synced operations. The legacy endpoint has no observed
+      // versions, so it cannot safely restore either side of a page containing synced content.
+      if ((action === "history" && snapshot.blocks.some(block => block.type === "synced")) || now.blocks.some(block => block.type === "synced")) {
+        return json({ error: "synced_receipt_requires_versions" }, 400);
+      }
+      if (action === "from-template") snapshot.blocks = snapshot.blocks.map(block => block.type === "synced" ? { ...block, id: crypto.randomUUID() } : block);
+      const { statement, version } = versionInsert(db, slug, now, true);
+      const guard = { sql: "EXISTS (SELECT 1 FROM editor_history WHERE id = ?)", binds: [version.id] };
+      const restored = { ...snapshot.page, updated: Math.max(Date.now(), now.page.updated + 1), source: "editor", hash: null };
       const keys = Object.keys(restored).filter((key) => !["slug", "parent", "ord"].includes(key));
       snapshot.settings = { ...meta.settings, ...snapshot.settings };
-      await db.batch([
+      const result = await db.batch([
+        db.prepare("UPDATE pages SET updated = updated WHERE slug = ?").bind(slug),
         statement,
-        db.prepare('UPDATE pages SET ' + keys.map((key) => '"' + key.replaceAll('"', '""') + '" = ?').join(", ") + " WHERE slug = ?").bind(...keys.map((key) => restored[key]), slug),
-        ...replaceContent(db, slug, snapshot),
+        db.prepare('UPDATE pages SET ' + keys.map((key) => '"' + key.replaceAll('"', '""') + '" = ?').join(", ") + " WHERE slug = ? AND " + guard.sql).bind(...keys.map((key) => restored[key]), slug, ...guard.binds),
+        ...replaceContent(db, slug, snapshot, guard),
         // issue 107: the restored button actions count as saved by whoever restores them.
-        ...(helpers.buttonSavers ? await helpers.buttonSavers(db, slug, snapshot.blocks, now.blocks, snapshot.page && snapshot.page.slug ? String(snapshot.page.slug) : slug) : []),
+        ...(helpers.buttonSavers ? await helpers.buttonSavers(db, slug, snapshot.blocks, now.blocks, snapshot.page && snapshot.page.slug ? String(snapshot.page.slug) : slug, guard) : []),
       ]);
+      if (!Number(result[1]?.meta?.changes)) return json({ error: "conflict" }, 409);
       return json({ ok: true, slug, versionId: version.id, settings: snapshot.settings });
     }
 
@@ -303,6 +321,8 @@ export async function handleEditorApi(request, db, url, helpers) {
       const parent = "parent" in body ? (body.parent === null ? null : textValue(body.parent, "parent", 200)) : page.parent;
       if (parent && (!await db.prepare("SELECT slug FROM pages WHERE slug = ?").bind(parent).first() || (await readEditorPageMeta(db, parent)).trashed)) throw new EditorInputError("Invalid parent.");
       const snapshot = await snapshotPage(db, slug);
+      if (helpers.guardSyncedWrite) helpers.guardSyncedWrite(snapshot.blocks, target);
+      snapshot.blocks = snapshot.blocks.map(block => block.type === "synced" ? { ...block, id: crypto.randomUUID() } : block);
       const max = await db.prepare("SELECT COALESCE(MAX(ord), 0) AS m FROM pages WHERE parent IS ?").bind(parent).first();
       const copy = { ...snapshot.page, slug: target, title, parent, ord: Number(max.m) + 10, updated: Date.now(), source: "editor", hash: null };
       await db.batch([insertRow(db, "pages", copy), ...replaceContent(db, target, snapshot), ...(helpers.buttonSavers ? await helpers.buttonSavers(db, target, snapshot.blocks, [], slug) : [])]);

@@ -31,6 +31,10 @@
     if (!snapshot || snapshot.page.updated !== body.base_updated) return conflict();
     const old = new Map(snapshot.blocks.map(block => [block.id, block]));
     if (body.deletes.some(id => !old.has(id))) return json({ error: "없는 블록이에요." }, 400);
+    const raw = new Map(current.blocks.map(block => [block.id, block]));
+    for (const id of body.deletes) raw.delete(id);
+    for (const block of body.upserts) raw.set(block.id, block);
+    guardSyncedWrite((body.order ?? current.blocks.map(block => block.id)).map(id => raw.get(id)).filter(Boolean), slug, current.blocks);
     const buttons = new Set();
     const upserts = await guardButtonBlocks(db, current.blocks, humanMarkSaves(current.blocks, normaliseBlocks(body.upserts), Date.now(), await humanAgentPage(db, slug)), buttons);
     const blocks = new Map(current.blocks.map(block => [block.id, block]));
@@ -53,6 +57,7 @@
       finalOrder = structured.map(block => block.id);
       ordered = structured;
     }
+    guardSyncedWrite(ordered, slug, current.blocks);
     const title = body.title === undefined ? snapshot.page.title : body.title.trim().slice(0, 200);
     const updated = Math.max(Date.now(), body.base_updated + 1);
     const hash = blocksHash(ordered);

@@ -279,6 +279,15 @@ const pages = await collect();
 await rm(DIST, { recursive: true, force: true });
 await mkdir(DIST, { recursive: true });
 await cp(ASSETS, DIST, { recursive: true });
+// The public pages share the landing's top bar (gate/site-nav-html.ts): one header, written in assets/_site/index.html.
+{
+  const { withSiteNav } = await import("./gate/site-nav-html.ts");
+  const landing = await readFile(join(ASSETS, "_site", "index.html"), "utf8");
+  for (const name of ["download"]) {
+    const file = join(DIST, "_site", name + ".html");
+    await writeFile(file, withSiteNav(await readFile(file, "utf8"), landing, "/" + name), "utf8");
+  }
+}
 // Editor first-screen scripts ship whitespace-minified (classic scripts, behaviour unchanged) to stay under the editor cap.
 // The block models load on the editor first screen, so they get full minify like editor.js.
 for (const name of ["editor-model.js", "columns-model.js", "ai-marks.js"]) {
@@ -287,11 +296,29 @@ for (const name of ["editor-model.js", "columns-model.js", "ai-marks.js"]) {
   await writeFile(join(DIST, name), await built.outputs[0].text());
 }
 // db.js and db-views.js are single IIFEs that talk to the page only through window.*, so they get full minify like editor.js.
-for (const name of ["db.js", "db-views.js", "editor-pages-ui.js", "editor-format.js"]) {
+// i18n-app.js (the en/zh dictionary loader, issue 147) is one IIFE that talks to the page only through window.* as well.
+for (const name of ["db.js", "db-views.js", "editor-pages-ui.js", "editor-format.js", "i18n-app.js"]) {
   const built = await Bun.build({ entrypoints: [join(ASSETS, name)], minify: true, format: "iife" });
   if (!built.success) throw new AggregateError(built.logs, name + " minify failed");
   await writeFile(join(DIST, name), await built.outputs[0].text());
 }
+// welcome-guide.js (the 시작 가이드 coach) is the same kind of IIFE (window.AcardGuide only); its phone placement (#150) fits the total cap this way.
+// Desktop onboarding shares the site/auth styles. Minify these isolated page scripts too so the new screens fit
+// the existing total-client cap without adding anything to the reader/editor first-screen bundles.
+for (const name of ["_site/welcome-guide.js", "_site/auth.js", "_site/onboarding.js", "_site/settings.js"]) {
+  const built = await Bun.build({ entrypoints: [join(ASSETS, name)], minify: true, format: "iife" });
+  if (!built.success) throw new AggregateError(built.logs, name + " minify failed");
+  await writeFile(join(DIST, name), await built.outputs[0].text());
+}
+// The landing's own files (acard-landing-examples-live: the example cards' frame cycle and markdown demo) ship minified the
+// same way, so the section fits the total cap; tests read the sources in assets/_site.
+for (const name of ["_site/landing-examples.js"]) {
+  const built = await Bun.build({ entrypoints: [join(ASSETS, name)], minify: true, format: "iife" });
+  if (!built.success) throw new AggregateError(built.logs, name + " minify failed");
+  await writeFile(join(DIST, name), await built.outputs[0].text());
+}
+for (const name of ["_site/styles.css", "_site/type.css"]) await writeFile(join(DIST, name), minifyCss(await readFile(join(ASSETS, name), "utf8")) + "\n", "utf8");
+for (const name of ["_site/auth.css", "_site/onboarding.css"]) await writeFile(join(DIST, name), minifyCss(await readFile(join(ASSETS, name), "utf8")) + "\n", "utf8");
 // editor.js is one IIFE that talks to the page only through window.*, so it gets full minify (local names too) like app.js:
 // -2 KB gzip on the editor first screen, which leaves room for the block color/icon entries (notion-parity C6) under the same cap.
 const editorBuild = await Bun.build({ entrypoints: [join(ASSETS, "editor.js")], minify: true, format: "iife" });
@@ -397,6 +424,15 @@ for (const [chunk, code] of Object.entries(lazyVersions.components ? componentFa
   const bytes = Buffer.from(code);
   await writeFile(join(DIST, "lazy", chunk + ".js"), bytes);
   lazyVersions[chunk] = { js: Bun.hash(bytes).toString(36).slice(0, 8) };
+}
+// The browser video re-encode (acard-upload-100mb, editor-next/video-encode.js) bundles mediabunny (MPL-2.0, unmodified)
+// from node_modules at build time instead of shipping a committed copy; big-upload loads it only for a dropped video.
+if (lazyVersions["big-upload"]) {
+  const built = await Bun.build({ entrypoints: [join(ROOT, "editor-next", "video-encode.js")], minify: true, target: "browser", format: "iife" });
+  if (!built.success) throw new AggregateError(built.logs, "video-encode build failed");
+  const bytes = Buffer.from("/*! mediabunny (MPL-2.0) https://github.com/Vanilagy/mediabunny - unmodified, bundled */\n" + await built.outputs[0].text());
+  await writeFile(join(DIST, "lazy", "video-encode.js"), bytes);
+  lazyVersions["video-encode"] = { js: Bun.hash(bytes).toString(36).slice(0, 8) };
 }
 for (const [name, versions] of Object.entries(lazyVersions)) {
   if (!versions.js) throw new Error("Lazy feature needs JavaScript: " + name);
@@ -573,7 +609,7 @@ for (const dir of ["fonts", "_site"]) {
 for (const rel of nestedFiles) nestedVersion.set(rel, await hashOf(rel));
 const leafVersion = new Map<string, string>();
 for (const name of await readdir(DIST)) if (/\.(svg|png|ico)$/.test(name)) leafVersion.set(name, await hashOf(name));
-const NESTED_REF = /((?:href|src|content)=\\?["']|url\(\\?["']?|["'])\/((?:fonts|_site)\/[\w./-]+\.(?:css|js|svg|png|woff2))(?=\\?["')])/g;
+const NESTED_REF = /((?:href|src|content)=\\?["']|url\(\\?["']?|["'])\/((?:fonts|_site)\/[\w./-]+\.(?:css|js|svg|png|woff2))(?=(?:#[\w-]+)?\\?["')])/g;
 const LEAF_REF = /(url\(\\?["']?)\/([\w.-]+\.(?:svg|png|ico))(?=\\?["')])/g;
 const stampNested = (text: string) => text.replace(NESTED_REF, (all, lead: string, path: string) => (nestedVersion.has(path) ? lead + "/" + path + "?v=" + nestedVersion.get(path) : all));
 const styleFiles = [...nestedFiles.filter((f) => f.endsWith(".css")), ...(await readdir(DIST)).filter((f) => f.endsWith(".css"))];
@@ -607,8 +643,10 @@ for (const [name, hash] of Object.entries(uiVersions)) staticVersions["lazy/ui-"
 const offlineSource = await readFile(join(ROOT, "offline-sw.js"), "utf8");
 const offlineShell = [...assetVersion].filter(([name]) => /\.(css|js|svg|png|ico)$/.test(name)).map(([name, hash]) => "/" + name + "?v=" + hash);
 offlineShell.push(...Object.entries(imageVersions).filter(([path]) => /^\/img\/(icons|avatars)\//.test(path)).map(([path, hash]) => path + "?v=" + hash));
-const offlineVersion = Bun.hash(offlineSource + workerOut + JSON.stringify(offlineShell)).toString(36);
-const serviceWorkerSource = offlineSource + "\nconst offline = createOfflineWorker({ caches, origin: self.location.origin, fetch: request => fetch(request), report: error => console.error(error), unregister: () => self.registration.unregister(), cookieId: () => self.cookieStore ? self.cookieStore.get(\"acard_id\").then(c => c ? c.value : null) : undefined, notify: (message, id) => self.clients.matchAll({ type: \"window\" }).then(list => list.forEach(client => { if (!id || offline.identity(client.id) === id) client.postMessage(message); })) }, " + JSON.stringify({ version: offlineVersion, shell: offlineShell }) + ");\n" +
+const offlineLazy = Object.entries(lazyVersions).flatMap(([name, versions]) => Object.entries(versions).map(([ext, hash]) => "/lazy/" + name + "." + ext + "?v=" + hash));
+offlineLazy.push(...[...nestedVersion].filter(([path]) => /\.(js|css)$/.test(path)).map(([path, hash]) => "/" + path + "?v=" + hash));
+const offlineVersion = Bun.hash(offlineSource + workerOut + JSON.stringify(offlineShell) + JSON.stringify(offlineLazy)).toString(36);
+const serviceWorkerSource = offlineSource + "\nconst offline = createOfflineWorker({ caches, origin: self.location.origin, fetch: request => fetch(request), report: error => console.error(error), unregister: () => self.registration.unregister(), cookieId: () => self.cookieStore ? self.cookieStore.get(\"acard_id\").then(c => c ? c.value : null) : undefined, notify: (message, id) => self.clients.matchAll({ type: \"window\" }).then(list => list.forEach(client => { if (!id || offline.identity(client.id) === id) client.postMessage(message); })) }, " + JSON.stringify({ version: offlineVersion, shell: offlineShell, lazy: offlineLazy }) + ");\n" +
   // A new worker takes over at once: a broken older one must not keep control while any tab stays open.
   'self.addEventListener("install", event => event.waitUntil(offline.install().finally(() => self.skipWaiting())));\n' +
   'self.addEventListener("activate", event => event.waitUntil(offline.activate().then(() => self.clients.claim())));\n' +

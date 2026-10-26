@@ -28,6 +28,7 @@ export type BlockType =
   | "bookmark"
   | "columns"
   | "column"
+  | "synced"
   | "table"
   | "equation"
   | "toc"
@@ -133,6 +134,86 @@ const META_LINE = /^\s*<!--acard (\{.*\})-->\s*$/;
 const COLUMNS_OPEN = /^\s*<!--acard columns( (\{.*\}))?-->\s*$/;
 const COLUMN_LINE = /^\s*<!--acard column-->\s*$/;
 const COLUMNS_CLOSE = /^\s*<!--acard \/columns-->\s*$/;
+const SYNCED_OPEN = /^\s*<!--acard synced (\{.*\})-->\s*$/;
+const SYNCED_CLOSE = /^\s*<!--acard \/synced-->\s*$/;
+const SYNCED_ID = /^[\p{L}\p{N}_-]{1,60}$/u;
+const SYNCED_PAGE = /^[\p{L}\p{N}_-]{1,160}$/u;
+type SyncedMeta = { v: 1; source: { page: string; block: string } | null };
+
+function syncedMeta(raw: unknown): SyncedMeta | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (value.v !== 1 || Object.keys(value).length !== 2 || !("source" in value)) return null;
+  if (value.source === null) return { v: 1, source: null };
+  const source = value.source as Record<string, unknown>;
+  if (!source || typeof source !== "object" || Array.isArray(source) || Object.keys(source).length !== 2 ||
+      typeof source.page !== "string" || !SYNCED_PAGE.test(source.page) ||
+      typeof source.block !== "string" || !SYNCED_ID.test(source.block)) return null;
+  return { v: 1, source: { page: source.page, block: source.block } };
+}
+
+function syncedLink(source: NonNullable<SyncedMeta["source"]>): string {
+  return "[Synced content](/" + source.page + "/#block-" + source.block + ")";
+}
+
+// Decide complete constructs before consuming anything. A nested or unmatched source invalidates its whole region;
+// fenced/equation/legacy-column bodies and escaped markers are opaque. Ordinary columns still use their existing parser.
+function syncedMarkers(lines: string[]): { sources: Map<number, { end: number; id: string }>; references: Map<number, SyncedMeta> } {
+  const sources = new Map<number, { end: number; id: string }>();
+  const references = new Map<number, SyncedMeta>();
+  let region: { start: number; depth: number; id: string; invalid: boolean } | null = null;
+  let fence: { char: string; size: number; loose: boolean } | null = null;
+  let opaque = "";
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (fence) {
+      if (fence.loose ? /^```/.test(line) : new RegExp("^" + fence.char + "{" + fence.size + ",}\\s*$").test(line)) fence = null;
+      continue;
+    }
+    const startFence = /^(`{3,}|~{3,})(.*)$/.exec(line);
+    if (startFence) {
+      const ticks = startFence[1];
+      fence = { char: ticks[0], size: ticks.length, loose: ticks === "```" && !VISUAL_FENCES[startFence[2].trim().split(/\s/)[0]] };
+      continue;
+    }
+    if (opaque) { if (line === opaque) opaque = ""; continue; }
+    if (line === "$$") { opaque = "$$"; continue; }
+    if (/^:::\s*cols?\d*\s*$/i.test(line)) { opaque = ":::"; continue; }
+    if (/^<!--acard synced\b/.test(line)) {
+      if (region) { region.depth += 1; region.invalid = true; continue; }
+      let id = "";
+      const open = SYNCED_OPEN.exec(line);
+      try {
+        const value = open ? JSON.parse(open[1]) : null;
+        if (value?.v === 1 && typeof value.id === "string" && SYNCED_ID.test(value.id) && Object.keys(value).length === 2) id = value.id;
+      } catch {}
+      region = { start: index, depth: 1, id, invalid: !id };
+      continue;
+    }
+    if (SYNCED_CLOSE.test(line)) {
+      if (region && --region.depth === 0) {
+        if (!region.invalid && /^ */.exec(lines[region.start])![0] === /^ */.exec(lines[index])![0]) sources.set(region.start, { end: index, id: region.id });
+        region = null;
+      }
+      continue;
+    }
+    const comment = META_LINE.exec(lines[index]);
+    if (!comment) continue;
+    try {
+      const value = JSON.parse(comment[1]);
+      if (!value || typeof value !== "object" || !("synced" in value)) continue;
+      if (region) { region.invalid = true; continue; }
+      const meta = syncedMeta(value.synced);
+      const previous = lines[index - 1];
+      let next = index + 1;
+      while (next < lines.length && !lines[next].trim()) next += 1;
+      if (next < lines.length && /^ */.exec(lines[next])![0].length > /^ */.exec(lines[index])![0].length) continue;
+      if (Object.keys(value).length === 1 && meta?.source && previous?.trim() === syncedLink(meta.source) &&
+          /^ */.exec(previous)![0] === /^ */.exec(lines[index])![0]) references.set(index - 1, meta);
+    } catch {}
+  }
+  return { sources, references };
+}
 
 // Whether the columns marker at index has its closing marker (nested sets counted) before the document ends.
 function columnsClosed(lines: string[], index: number, escaped: Set<number>): boolean {
@@ -150,6 +231,8 @@ const COLOR_NAME = /^(gray|brown|orange|yellow|green|blue|purple|pink|red)(_back
 function cleanBlockMeta(raw: unknown): Record<string, unknown> | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const src = raw as Record<string, unknown>;
+  // Synced comments are a whole construct, never partially applied as ordinary block styling.
+  if ("synced" in src) return null;
   const out: Record<string, unknown> = {};
   if (typeof src.color === "string" && COLOR_NAME.test(src.color)) out.color = src.color;
   if (typeof src.icon === "string" && src.icon.trim() && [...src.icon.trim()].length <= 8) out.icon = src.icon.trim();
@@ -218,7 +301,7 @@ function mdButtonActions(raw: unknown): Record<string, unknown>[] | null {
 }
 
 // The meta a block writes into its comment line: progress keeps its own color syntax, height only for embeds (visual
-// fences carry theirs), open only with a toggle heading (a toggle block's open state was never in markdown).
+// fences carry theirs), open with a toggle heading or explicitly folded list (toggle blocks keep their legacy syntax).
 function blockMetaComment(block: Block): Record<string, unknown> | null {
   const meta = (block.meta || {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
@@ -227,6 +310,7 @@ function blockMetaComment(block: Block): Record<string, unknown> | null {
   if (block.type === "button") { const actions = mdButtonActions(meta.actions); if (actions) out.actions = actions; }
   if (block.type === "embed" && Number(meta.height) > 0) out.height = Math.min(2000, Math.max(120, Math.round(Number(meta.height))));
   if (/^heading[1-4]$/.test(block.type) && meta.toggle === true) { out.toggle = true; out.open = meta.open === true; }
+  if (/^(bulleted|numbered)$/.test(block.type) && typeof meta.open === "boolean") out.open = meta.open;
   if (AI_MARK.test(String(meta.ai))) out.ai = meta.ai;
   const spans = aiSpansOf(block);
   if (spans.length) out.aiSpans = spans;
@@ -234,7 +318,9 @@ function blockMetaComment(block: Block): Record<string, unknown> | null {
 }
 
 export function markdownToBlocks(markdown: string, options: MarkdownOptions = {}): Block[] {
-  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const originalLines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const lines = originalLines.slice();
+  const synced = options.meta ? syncedMarkers(lines) : null;
   const blocks: Block[] = [];
   let i = 0;
   // Meta comment lines are found first (by index) so a later unescape cannot turn text into meta.
@@ -265,6 +351,22 @@ export function markdownToBlocks(markdown: string, options: MarkdownOptions = {}
     currentIndent = Math.floor((/^ */.exec(raw)?.[0].length ?? 0) / 2) + (columnStack.length ? columnStack[columnStack.length - 1].base + 2 : 0);
     const line = raw.trim();
 
+    const source = synced?.sources.get(i);
+    if (source) {
+      const pad = /^ */.exec(raw)![0];
+      const children = markdownToBlocks(originalLines.slice(i + 1, source.end).map(line => line.startsWith(pad) ? line.slice(pad.length) : line).join("\n"), options);
+      push("synced", "", { id: source.id, meta: { synced: { v: 1, source: null } } });
+      for (const child of children) blocks.push({ ...child, indent: (child.indent || 0) + currentIndent + 1 });
+      i = source.end + 1;
+      continue;
+    }
+    const reference = synced?.references.get(i);
+    if (reference) {
+      push("synced", "", { meta: { synced: reference } });
+      i += 2;
+      continue;
+    }
+
     const comment = metaLines.get(i);
     if (comment && blocks.length) {
       const last = blocks[blocks.length - 1];
@@ -279,16 +381,16 @@ export function markdownToBlocks(markdown: string, options: MarkdownOptions = {}
       continue;
     }
 
-    if (/^```/.test(line.trim())) {
-      const ticks = /^`+/.exec(line.trim())![0];
+    if (/^```/.test(line.trim()) || (options.meta && /^~~~/.test(line))) {
+      const ticks = /^(?:`+|~+)/.exec(line.trim())![0];
       const info = line.trim().slice(ticks.length).trim();
       const langMatch = /^(\S*)\s*(.*)$/.exec(info)!;
       const visual = VISUAL_FENCES[langMatch[1]];
       const lang = visual ? langMatch[1] : info;
-      const close = new RegExp("^`{" + ticks.length + ",}\\s*$");
+      const close = new RegExp("^" + ticks[0] + "{" + ticks.length + ",}\\s*$");
       const body: string[] = [];
       i += 1;
-      while (i < lines.length && !(visual || ticks.length > 3 ? close.test(lines[i].trim()) : /^```/.test(lines[i].trim()))) {
+      while (i < lines.length && !(visual || ticks.length > 3 || ticks[0] === "~" ? close.test(lines[i].trim()) : /^```/.test(lines[i].trim()))) {
         body.push(lines[i].startsWith("  ".repeat(currentIndent)) ? lines[i].slice(currentIndent * 2) : lines[i]);
         i += 1;
       }
@@ -529,6 +631,8 @@ export function markdownToBlocks(markdown: string, options: MarkdownOptions = {}
         /^(\s*)\d+[.)]\s+/.test(peek) ||
         /^>\s?/.test(peek) ||
         /^```/.test(peek.trim()) ||
+        (options.meta && /^~~~/.test(peek.trim())) ||
+        synced?.sources.has(i) || synced?.references.has(i) ||
         isTableRow(peek) ||
         /^https?:\/\/\S+$/.test(peek.trim()) ||
         /^(-{3,}|\*{3,}|_{3,})$/.test(peek.trim()) ||
@@ -582,6 +686,25 @@ export function blocksToMarkdown(blocks: Block[], options: MarkdownOptions = {})
   blocks.forEach((block, index) => {
     if (index < skipUntil) return;
     while (closers.length && (block.indent || 0) <= closers[closers.length - 1].indent) out.push(closers.pop()!.text);
+    if (block.type === "synced") {
+      const meta = syncedMeta(block.meta?.synced);
+      const depth = block.indent || 0;
+      let end = index + 1;
+      while (end < blocks.length && (blocks[end].indent || 0) > depth) end += 1;
+      if (!meta || block.text || !SYNCED_ID.test(block.id) || (meta.source && end !== index + 1) ||
+          blocks.slice(index + 1, end).some(child => child.type === "synced")) throw new Error("Invalid synced block structure: " + block.id);
+      const pad = "  ".repeat(Math.max(0, depth - lift[index]));
+      if (meta.source) {
+        out.push(pad + syncedLink(meta.source) + (options.meta ? "\n" + pad + "<!--acard " + JSON.stringify({ synced: meta }) + "-->" : ""));
+      } else {
+        const content = blocksToMarkdown(blocks.slice(index + 1, end).map(child => ({ ...child, indent: (child.indent || 0) - depth - 1 })), options);
+        if (options.meta) out.push(pad + "<!--acard synced " + JSON.stringify({ v: 1, id: block.id }) + "-->");
+        if (content) out.push(content.split("\n").map(line => line ? pad + line : "").join("\n"));
+        if (options.meta) out.push(pad + "<!--acard /synced-->");
+      }
+      skipUntil = end;
+      return;
+    }
     if (!options.meta && block.type === "columns" && model) {
       // Without the flag, columns that hold only one-line paragraphs go back to :::cols (reads back the same).
       const plain = plainColumns(blocks, index);

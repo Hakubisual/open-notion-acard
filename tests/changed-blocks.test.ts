@@ -124,9 +124,12 @@ const lazy = readFileSync(new URL("../assets/features/lazy/changed-blocks.js", i
 const queueSource = readFileSync(new URL("../assets/features/save-queue.js", import.meta.url), "utf8");
 function client() {
   const requests: { method: string; body?: any }[] = [];
+  const listeners = new Map<string, (snapshot: unknown) => void>();
   const editor: any = { api: async (path: string) => { requests.push({ method: "GET" }); return (await call("/api" + path)).json(); },
     transport: async (slug: string, body: any) => { requests.push({ method: "PUT", body }); return call("/api/page/" + slug, "PUT", body); },
-    provide: (_: string, api: any) => { editor.feature = api; }, lazy: async () => editor.feature };
+    provide: (_: string, api: any) => { editor.feature = api; }, lazy: async () => editor.feature,
+    slug: "delta", on: (event: string, listener: (snapshot: unknown) => void) => listeners.set(event, listener),
+    emit: (event: string, snapshot: unknown) => listeners.get(event)?.(snapshot) };
   const context: any = { window: { AcardEditor: editor }, Map, Response, JSON, Promise,
     fetch: async (path: string, options: any) => {
       const body = JSON.parse(options.body); requests.push({ method: options.method, body });
@@ -135,6 +138,22 @@ function client() {
   runInNewContext(lazy, context); runInNewContext(entry, context);
   return { editor, requests };
 }
+
+test("an adopted remote baseline lets the next edit save without restoring old content", async () => {
+  const { editor, requests } = client();
+  const first = await current();
+  await editor.transport("delta", { title: first.page.title, blocks: first.blocks, base_updated: first.page.updated });
+  await patch({ upserts: [{ ...block("b0", "remote"), ord: 0 }] });
+  const remote = await current();
+  editor.emit("remoteAdopted", { title: remote.page.title, blocks: remote.blocks, updated: remote.page.updated });
+  remote.blocks[1].text = "local after remote";
+
+  const response = await editor.transport("delta", { title: remote.page.title, blocks: remote.blocks, base_updated: remote.page.updated });
+
+  expect(response.status).toBe(200);
+  expect((await current()).blocks.slice(0, 2).map((entry: { text: string }) => entry.text)).toEqual(["remote", "local after remote"]);
+  expect(requests.at(-1)?.body.upserts.map((entry: { id: string }) => entry.id)).toEqual(["b1"]);
+});
 
 test("client sends one block, then only order, and retains the draft without PUT on 409", async () => {
   const { editor, requests } = client();

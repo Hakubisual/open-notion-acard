@@ -107,6 +107,24 @@ test("attach_images refuses missing captions, local paths the server cannot read
   expect((await run("readBlocks", { page: "p" })).blocks.length).toBe(1);
 });
 
+test("#176: an image the server could not fetch (a local path) draws a placeholder figure, never the raw path, and keeps its row", () => {
+  const path = "C:/Users/PC/AppData/Local/Temp/codex-clipboard-c09acbf7-fc22-42c6-a969-68160f67d858.png";
+  const md = "문단\n\n![](" + path + ' "g=v1 agent")\n![기판 부품이 고르게 보임](/media/0123456789abcdef "g=v1 agent")\n![둘째](/media/0123456789abcdee "g=v1 agent")';
+  const html = renderBlocks(markdownToBlocks(md), {});
+  expect(html).not.toContain("<p>" + path);
+  expect(html).not.toContain("C:/Users/PC");
+  expect(html).toContain("이미지를 불러올 수 없어요");
+  expect(html).toContain("codex-clipboard-c09acbf7-fc22-42c6-a969-68160f67d858.png");
+  const row = html.slice(html.indexOf('<div class="imgrow">'));
+  expect(row.match(/<figure class="img/g)?.length).toBe(3);
+  expect(row).not.toContain('<div class="imgrow"><p>');
+  const single = renderBlocks(markdownToBlocks("![캡션](./shot.png)"), {});
+  expect(single).toContain("이미지를 불러올 수 없어요");
+  expect(single).toContain("shot.png");
+  expect(single).toContain("<figcaption>캡션</figcaption>");
+  expect(single).not.toContain("<p>./shot.png");
+});
+
 test("agent image tokens round-trip through markdown and old width-only images stay unchanged", () => {
   const md = '![a](/media/abc "60 t=1:05 g=v1 agent")\n![b](/media/def "40")\n![c](/media/ghi)';
   const blocks = markdownToBlocks(md);

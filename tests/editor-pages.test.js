@@ -15,7 +15,7 @@ function d1(sqlite) {
         bind(...args) { return { ...this, args }; },
         async first() { return sqlite.query(sql).get(...this.args); },
         async all() { return { results: sqlite.query(sql).all(...this.args) }; },
-        execute() { return sqlite.query(sql).run(...this.args); },
+        execute() { const result = sqlite.query(sql).run(...this.args); return { success: true, meta: { changes: result.changes } }; },
         async run() { return this.execute(); },
       };
     },

@@ -28,12 +28,14 @@
     var current = await editor.api("/page/" + encodeURIComponent(slug));
     return remember(slug, current.page.title, current.blocks, current.page.updated);
   }
+  if (editor.on) editor.on("remoteAdopted", function (snapshot) { remember(editor.slug, snapshot.title, snapshot.blocks, snapshot.updated); });
   editor.provide("changed-blocks", { send: async function (slug, payload) {
     // Freeze the submitted state before an asynchronous read or network send.
     payload = JSON.parse(JSON.stringify(payload));
     if (!Number.isSafeInteger(payload.base_updated)) return new Response(JSON.stringify({ error: "불러오지 못했어요 · 읽기 전용. 새로고침해 주세요." }), { status: 428 });
     var base = saved.get(slug);
     if (!base && slug === editor.slug && editor.base) base = remember(slug, editor.base.title, editor.base.blocks, editor.base.updated);
+    if (editor.state && editor.state.recoveredDraft && base && base.updated !== payload.base_updated) base = await read(slug);
     if (!base) base = await read(slug);
     if (base.updated !== payload.base_updated) return new Response(JSON.stringify({ error: "conflict", updated: base.updated }), { status: 409 });
     var next = new Map(payload.blocks.map(function (block) { return [block.id, hash(block)]; }));
@@ -47,6 +49,7 @@
     if (!delta.upserts.length && !delta.deletes.length && !delta.order && delta.title === undefined) {
       return new Response(JSON.stringify({ ok: true, updated: base.updated, blocks: order.length }));
     }
+    if (editor.saveQueue && !editor.saveQueue.isCurrent()) throw Error("Draft identity unavailable");
     var response = await fetch("/api/page/" + encodeURIComponent(slug) + "/blocks", {
       method: "PATCH", headers: { "content-type": "application/json", "x-acard-client": editor.clientId || "" }, body: JSON.stringify(delta)
     });

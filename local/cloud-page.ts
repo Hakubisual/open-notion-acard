@@ -195,7 +195,9 @@ async function loadSync() {
   $("sync-toggle").disabled = !s.enabled && !syncActive;
   $("sync-now").hidden = !s.enabled;
   const last = s.last ? (s.last.error ? "마지막 동기화 실패: " + esc(s.last.error) : "<strong>마지막 동기화: " + esc(when(s.last.at)) + "</strong> · 받은 페이지 " + s.last.pulled + "개, 보낸 페이지 " + s.last.pushed + "개") : (s.enabled ? "곧 처음 맞춰요…" : (syncActive ? "켜면 " + Math.round(s.intervalMs / 1000) + "초마다 맞춰요." : "구독 중인 계정에서 켤 수 있어요."));
-  $("sync-line").innerHTML = last + (s.conflicts ? "<br>충돌 사본 " + s.conflicts + "개를 만들었어요. 사이드바에서 '(충돌 사본)' 페이지를 확인해 주세요." : "");
+  // #136: every PC shows the same count - a conflict found on one PC reaches the others with its page.
+  const recent = (s.recent || []).map((c) => '<li><a href="/edit/' + esc(encodeURIComponent(c.copy || c.slug)) + '">' + esc(c.title) + "</a> · " + esc(when(c.at)) + (c.copy ? " · 다른 쪽 내용은 '(충돌 사본)'에 있어요" : " · 나중에 고친 값이 남았어요") + "</li>").join("");
+  $("sync-line").innerHTML = last + (s.conflicts ? "<br><strong>충돌 " + s.conflicts + "건</strong> · 같은 곳을 두 PC 에서 고친 곳이에요. 최근 충돌:<ul class='list'>" + recent + "</ul>" : "");
 }
 $("sync-toggle").onclick = async () => {
   say("sync-msg", syncOn ? "끄는 중…" : "켜고 처음 맞추는 중…");

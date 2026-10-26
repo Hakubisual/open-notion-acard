@@ -3,7 +3,7 @@
 import { type Session, type TenancyEnv } from "./tenancy";
 
 export type AdminEnv = TenancyEnv;
-export type AdminDeps = { revokeGrants(userId: string): Promise<number>; revokeTokens(ws: string): Promise<number>; ctx?: unknown; cloud?: (api: string, actor: string) => Promise<Response | null> };
+export type AdminDeps = { revokeGrants(userId: string): Promise<number>; revokeTokens(ws: string): Promise<number>; ctx?: unknown; cloud?: (api: string, actor: string) => Promise<Response | null>; storageAlertTest?: () => Promise<unknown>; storageUsage?: () => Promise<unknown> };
 export const ADMIN_PATH = /(?!)/;
 export async function roleOf(_env: AdminEnv, _userId: string): Promise<string | null> { return null; }
 export async function isAdmin(_env: AdminEnv, _session: Session | null): Promise<boolean> { return false; }

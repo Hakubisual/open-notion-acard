@@ -19,7 +19,7 @@ function chshGaugeBody(value, min, max, target, d, h) {
   body += C.text(cx, 143, text, font, { anchor: "middle", weight: 750 });
   body += chshLabel(C, cx, 176, h.str(d.label, "목표 달성률", 80), 216, { anchor: "middle", cls: "vk-tick" });
   body += C.text(cx - R, 211, C.fmt(min, unit), 12, { anchor: "start", cls: "vk-tick" }) + C.text(cx + R, 211, C.fmt(max, unit), 12, { anchor: "end", cls: "vk-tick" });
-  if (target !== null) body += C.text(cx, 237, "목표 " + C.fmt(target, unit), 12, { anchor: "middle", cls: "vk-tick" });
+  if (target !== null) body += C.text(cx, 237, h.t("목표 ", "Target ") + C.fmt(target, unit), 12, { anchor: "middle", cls: "vk-tick" });
   return { w: 360, h: 256, body };
 }
 
@@ -43,7 +43,7 @@ function chshFunnelBody(stages, d, h, W) {
   const C = h.chart, unit = h.str(d.unit, "", 8), pal = C.palette(d.palette), narrow = W < 520;
   const width = narrow ? 174 : 330, cx = narrow ? 97 : 190, countX = narrow ? 255 : 475, H = stages.length * 66 + 32;
   const widths = stages.map((s) => width * Math.sqrt(s.value / stages[0].value));
-  let body = C.text(countX, 12, "인원" + (unit ? " (" + unit + ")" : ""), 12, { anchor: "end", cls: "vk-tick" }) + C.text(W - 10, 12, "이전 대비", 12, { anchor: "end", cls: "vk-tick" });
+  let body = C.text(countX, 12, h.t("인원", "Count") + (unit ? " (" + unit + ")" : ""), 12, { anchor: "end", cls: "vk-tick" }) + C.text(W - 10, 12, h.t("이전 대비", "vs. previous"), 12, { anchor: "end", cls: "vk-tick" });
   stages.forEach((s, i) => {
     const y = 30 + i * 66, top = widths[i], bottom = i + 1 < stages.length ? widths[i + 1] : top * 0.7;
     const conversion = i === 0 ? null : stages[i - 1].value > 0 ? s.value / stages[i - 1].value * 100 : null;

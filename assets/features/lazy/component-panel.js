@@ -80,7 +80,7 @@
     var summary = doc.createElement("summary");
     summary.textContent = comp.name + " 설정";
     var form = doc.createElement("div");
-    function draw() { preview.innerHTML = renderComponentBlock(block); }
+    function draw() { preview.innerHTML = renderComponentBlock(block, C.pageOf ? C.pageOf(block) : null); }
     panel.append(summary, chips(doc, comp, block, save, function () { draw(); form.dispatchEvent(new Event("reload")); }), form);
     host.append(preview, panel);
     draw();

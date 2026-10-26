@@ -9,6 +9,46 @@ function dgfObjects(value, h, max) { return h.list(value, max).filter((item) => 
 function dgfLines(C, x, y, value, width, size, max, opts) {
   return C.wrap(value, width, size, max).map((line, i) => C.text(x, y + i * size * 1.3, line, size, opts)).join("");
 }
+// One cycle stage stacked inside a circle of radius r: icon, the whole title in at most maxLines lines, and (with notes) the
+// whole note in one line. Every line is measured against the circle's chord at its own height, so nothing is cut with "…".
+// Returns null when the title or the note does not fit whole.
+function dgfCycleStage(C, s, r, size, notes, maxLines = 2) {
+  const pad = 4, lh = size * 1.2, icon = 24, noteH = 14, note = notes && s.text;
+  const chord = (y, half) => { const e = Math.abs(y) + half; return e < r ? 2 * Math.sqrt(r * r - e * e) - pad * 2 : 0; };
+  const whole = (lines, text) => lines.join("").replace(/\s/g, "") === text.normalize("NFC").replace(/\s/g, "");
+  for (let k = 1; k <= maxLines; k++) {
+    const top = -(icon + 3 + k * lh + (note ? 2 + noteH : 0)) / 2, ys = Array.from({ length: k }, (_, i) => top + icon + 3 + lh * (i + 0.5));
+    if (chord(top + icon / 2, icon / 2) < C.textW(s.icon, 22)) continue;
+    let width = Math.min(...ys.map((y) => chord(y, size * 0.6))), lines = C.wrap(s.title, width, size, k);
+    if (!whole(lines, s.title)) continue;
+    // Balance the lines ("看门狗 / 重启", not "看门狗重 / 启"): the narrowest width that keeps the line count and breaks
+    // no more words (Latin, digits, Hangul) than the widest wrap did. Han and kana may break between any two characters.
+    const breaks = (ls) => { const t = s.title.normalize("NFC").trim(); let pos = 0, n = 0; ls.forEach((l, i) => { pos = t.indexOf(l, pos) + l.length; if (i < ls.length - 1 && /[\p{L}\p{N}'’]/u.test(t[pos - 1] + t[pos]) && /^[^\s\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{2}$/u.test(t[pos - 1] + t[pos])) n += 1; }); return n; };
+    for (let w = width - 1, base = breaks(lines); w > 0; w -= 1) { const next = C.wrap(s.title, w, size, k); if (next.length !== lines.length || !whole(next, s.title) || breaks(next) > base) break; lines = next; }
+    const noteY = top + icon + 3 + k * lh + 2 + noteH / 2;
+    if (note && !whole(C.wrap(s.text, chord(noteY, 6.6), 11, 1), s.text)) return null;
+    return { iconY: top + icon / 2, lines, ys, noteY: note ? noteY : null };
+  }
+  return null;
+}
+// Smallest change that fits every title whole, at 13 px first: wrap to 2 lines, move the notes under the figure, grow the
+// circles (and the ring with them) up to r 52, then 3 lines at r 52 ("Enter Earth's shadow" needs it); only then the same at
+// 12 px (a smaller font alone does not help: at r 42 "지구 그림자 진입" still needs a third line). A title that fits nowhere
+// keeps only its icon in the circle and is written in full in the list under the figure.
+function dgfCycleLayout(C, stages) {
+  const r0 = Math.min(42, 110 * Math.sin(Math.PI / stages.length) - 10), hasNotes = stages.some((s) => s.text);
+  const tries = [];
+  for (const size of [13, 12]) {
+    for (let r = r0; r <= 52; r = r < 52 && r + 2 > 52 ? 52 : r + 2) for (const notes of [true, false]) tries.push({ r, size, notes, lines: 2 });
+    tries.push({ r: Math.max(r0, 52), size, notes: false, lines: 3 });
+  }
+  for (const t of tries) {
+    const fits = stages.map((s) => dgfCycleStage(C, s, t.r, t.size, t.notes, t.lines));
+    if (fits.every(Boolean)) return { r: t.r, size: t.size, notes: t.notes || !hasNotes, fits };
+  }
+  const r = Math.max(r0, 52);
+  return { r, size: 12, notes: false, fits: stages.map((s) => dgfCycleStage(C, s, r, 12, false, 3)) };
+}
 
 registerComponent({
   id: "diagram-cycle", family: "diagram", name: "개선 사이클",
@@ -17,23 +57,26 @@ registerComponent({
   presets: dgfPresets, defaults: { stages: [] },
   sample: { title: "개선 사이클", subtitle: "지속적인 개선 과정을 순환 구조로 나타냅니다.", stages: [{ icon: "♧", title: "아이디어", text: "문제 발견" }, { icon: "▤", title: "계획", text: "방향 설정" }, { icon: "⚙", title: "실행", text: "실험 및 개발" }, { icon: "⌕", title: "검토", text: "결과 분석" }, { icon: "▥", title: "개선", text: "다음 단계" }], caption: "사이클" },
   slash: { label: "개선 사이클", hint: "반복되는 단계와 흐름", ico: "↻", aliases: "개선 순환 사이클 cycle loop stages" },
-  css: ".ui-diagram-cycle .dgf-stage circle{fill:color-mix(in srgb,var(--dgf-color) 22%,var(--color-surface));stroke:color-mix(in srgb,var(--dgf-color) 65%,var(--color-border));stroke-width:1}.ui-diagram-cycle .dgf-stage .dgf-icon{fill:var(--dgf-color)}.ui-diagram-cycle .dgc-svg{max-width:440px;margin:auto}",
+  css: ".ui-diagram-cycle .dgf-stage circle{fill:color-mix(in srgb,var(--dgf-color) 22%,var(--color-surface));stroke:color-mix(in srgb,var(--dgf-color) 65%,var(--color-border));stroke-width:1}.ui-diagram-cycle .dgf-stage .dgf-icon{fill:var(--dgf-color)}.ui-diagram-cycle .dgc-svg{max-width:440px;margin:auto}.ui-diagram-cycle .dgf-cycle-notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:var(--space-1) var(--space-4);max-width:440px;margin:var(--space-3) auto 0;padding:0;list-style:none;font-size:var(--fs-13);line-height:var(--lh-snug,1.4);color:var(--color-text-dim);overflow-wrap:anywhere}.ui-diagram-cycle .dgf-cycle-notes li{position:relative;padding-left:14px}.ui-diagram-cycle .dgf-cycle-notes li::before{content:'';position:absolute;left:0;top:.45em;width:8px;height:8px;border-radius:50%;background:var(--dgf-color)}.ui-diagram-cycle .dgf-cycle-notes b{margin-right:4px;font-weight:650;color:var(--color-text)}",
   render(d, h) {
     const C = h.diagram, stages = dgfObjects(d.stages, h, 8).map((s, i) => ({ icon: h.str(s.icon, String(i + 1), 8), title: h.str(s.title, "단계 " + (i + 1), 80), text: h.str(s.text, "", 160) }));
     if (stages.length < 3) return C.figure("cycle", d, h, { empty: C.EMPTY });
-    const n = stages.length, R = 110, r = Math.min(42, R * Math.sin(Math.PI / n) - 10), gap = 2 * Math.asin((r + 5) / (2 * R));
-    const point = (a) => [160 + R * Math.cos(a), 160 + R * Math.sin(a)];
-    return C.figure("cycle", d, h, { w: 320, h: 320, label: "개선 사이클", desc: stages.map((s) => s.title).join(" → ") + " → " + stages[0].title,
-      table: C.table("순환 단계", ["순서", "단계", "설명"], stages.map((s, i) => [i + 1, s.title, s.text])),
+    const n = stages.length, fit = dgfCycleLayout(C, stages), r = fit.r, R = Math.max(110, (r + 10) / Math.sin(Math.PI / n));
+    const S = Math.max(320, Math.ceil(2 * (R + r) + 8)), mid = S / 2, gap = 2 * Math.asin((r + 5) / (2 * R));
+    const point = (a) => [mid + R * Math.cos(a), mid + R * Math.sin(a)];
+    const list = fit.notes && fit.fits.every(Boolean) ? "" : '<ul class="dgf-cycle-notes" aria-hidden="true">' + stages.map((s, i) => '<li style="--dgf-color:' + C.color(d.palette, i) + '"><b>' + C.esc(s.title) + '</b>' + (s.text ? " " + C.esc(s.text) : "") + '</li>').join("") + '</ul>';
+    return C.figure("cycle", d, h, { w: S, h: S, after: list, label: "개선 사이클", desc: stages.map((s) => s.title).join(" → ") + " → " + stages[0].title,
+      table: C.table(h.t("순환 단계", "Cycle stages"), [h.t("순서", "Order"), h.t("단계", "Stage"), h.t("설명", "Note")], stages.map((s, i) => [i + 1, s.title, s.text])),
       body(uid) {
         let body = C.marker(uid + "-arrow");
         stages.forEach((s, i) => {
           const angle = -Math.PI / 2 + i * 2 * Math.PI / n, a = point(angle + gap), b = point(angle + 2 * Math.PI / n - gap);
-          body += '<path class="dgf-cycle-arrow" d="M' + a.map(C.round).join(" ") + " A110 110 0 0 1 " + b.map(C.round).join(" ") + '" fill="none" stroke="var(--color-text-dim)" stroke-width="1.8" marker-end="url(#' + uid + '-arrow)"/>';
+          body += '<path class="dgf-cycle-arrow" d="M' + a.map(C.round).join(" ") + " A" + C.round(R) + " " + C.round(R) + " 0 0 1 " + b.map(C.round).join(" ") + '" fill="none" stroke="var(--color-text-dim)" stroke-width="1.8" marker-end="url(#' + uid + '-arrow)"/>';
         });
         stages.forEach((s, i) => {
-          const [x, y] = point(-Math.PI / 2 + i * 2 * Math.PI / n);
-          body += '<g class="dgf-stage" style="--dgf-color:' + C.color(d.palette, i) + '"><title>' + C.esc(s.title + (s.text ? " · " + s.text : "")) + '</title><circle cx="' + C.round(x) + '" cy="' + C.round(y) + '" r="' + C.round(r) + '"/>' + C.text(x, y - 19, s.icon, 22, { cls: "dgf-icon" }) + dgfLines(C, x, y + 2, s.title, r * 1.75, 13, 1, { weight: 700 }) + dgfLines(C, x, y + 20, s.text, r * 1.75, 11, 1, { cls: "dgc-muted" }) + '</g>';
+          const [x, y] = point(-Math.PI / 2 + i * 2 * Math.PI / n), f = fit.fits[i];
+          const inner = f ? C.text(x, y + f.iconY, s.icon, 22, { cls: "dgf-icon" }) + f.lines.map((line, j) => C.text(x, y + f.ys[j], line, fit.size, { weight: 700, cls: "dgf-label" })).join("") + (f.noteY === null ? "" : C.text(x, y + f.noteY, s.text, 11, { cls: "dgc-muted" })) : C.text(x, y, s.icon, 22, { cls: "dgf-icon" });
+          body += '<g class="dgf-stage" style="--dgf-color:' + C.color(d.palette, i) + '"><title>' + C.esc(s.title + (s.text ? " · " + s.text : "")) + '</title><circle cx="' + C.round(x) + '" cy="' + C.round(y) + '" r="' + C.round(r) + '"/>' + inner + '</g>';
         });
         return body;
       },
@@ -126,13 +169,13 @@ registerComponent({
     const uid = C.uid("kanban", d);
     const plot = '<div class="dgf-board" role="region" tabindex="0" aria-label="' + C.esc(h.str(d.title, "작업 보드", 80) + " · 좌우 방향키로 열 이동") + '" data-palette="' + C.palette(d.palette) + '" style="--dgf-columns:' + columns.length + '">' + columns.map((column, index) => {
       const title = h.str(column.title, "열 " + (index + 1), 80), cards = dgfObjects(column.cards, h, 24);
-      return '<section class="dgf-column" aria-labelledby="' + uid + '-' + index + '" style="--dgf-color:' + C.color(d.palette, index) + '"><div class="dgf-column-head"><span id="' + uid + '-' + index + '">' + C.esc(title) + '</span><span class="dgf-count" aria-label="' + cards.length + '개 작업">' + cards.length + '</span></div>' + (cards.length ? '<ul class="dgf-cards">' + cards.map((card) => {
+      return '<section class="dgf-column" aria-labelledby="' + uid + '-' + index + '" style="--dgf-color:' + C.color(d.palette, index) + '"><div class="dgf-column-head"><span id="' + uid + '-' + index + '">' + C.esc(title) + '</span><span class="dgf-count" aria-label="' + cards.length + h.t('개 작업', cards.length === 1 ? ' task' : ' tasks') + '">' + cards.length + '</span></div>' + (cards.length ? '<ul class="dgf-cards">' + cards.map((card) => {
         const tone = h.oneOf(card.tone, h.TONES, "neutral"), tag = h.str(card.tag, "", 40), assignee = h.str(card.assignee, "", 60);
         return '<li class="dgf-card" style="--dgf-tone-bg:var(--color-' + (tone === "accent" ? "accent-soft" : tone + "-bg") + ');--dgf-tone-fg:var(--color-' + (tone === "accent" ? "accent-strong" : tone + "-fg") + ')"><div class="dgf-card-title">' + C.esc(h.str(card.title, "제목 없는 작업", 160)) + '</div>' + (tag || assignee ? '<div class="dgf-meta">' + (tag ? '<span class="dgf-tag">' + C.esc(tag) + '</span>' : '') + (assignee ? '<span class="dgf-assignee" aria-label="담당자 ' + C.esc(assignee) + '">' + C.esc(assignee) + '</span>' : '') + '</div>' : '') + '</li>';
       }).join("") + '</ul>' : '<p class="dgf-empty-column">등록된 작업이 없어요.</p>') + '</section>';
     }).join("") + '</div>';
-    const summary = columns.map((column, i) => h.str(column.title, "열 " + (i + 1), 80) + ": " + dgfObjects(column.cards, h, 24).length + "개 작업");
+    const summary = columns.map((column, i) => { const n = dgfObjects(column.cards, h, 24).length; return h.str(column.title, h.t("열 ", "Column ") + (i + 1), 80) + ": " + n + h.t("개 작업", n === 1 ? " task" : " tasks"); });
     const total = columns.reduce((sum, column) => sum + dgfObjects(column.cards, h, 24).length, 0);
-    return C.figure("kanban", d, h, { plot, label: "작업 관리 칸반 보드", badge: '<span class="vk-sub" role="img" aria-label="' + C.esc(summary.join(" · ")) + '">' + total + '개 작업</span>', items: summary });
+    return C.figure("kanban", d, h, { plot, label: "작업 관리 칸반 보드", badge: '<span class="vk-sub" role="img" aria-label="' + C.esc(summary.join(" · ")) + '">' + total + h.t('개 작업', total === 1 ? ' task' : ' tasks') + '</span>', items: summary });
   },
 });

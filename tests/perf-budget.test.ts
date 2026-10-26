@@ -87,6 +87,8 @@ describe("performance budget", () => {
     expect(result.passed).toBe(true);
     expect(result.rows.at(-1)).toMatchObject({ key: "lazy/chart", bytes: 100, cap: 100 });
     expect((await measurePerformanceBudget(dist, { ...caps, lazyMaxRaw: 99 })).rows.filter(row => !row.passed).map(row => row.key)).toEqual(["lazy/chart"]);
+    expect((await measurePerformanceBudget(dist, { ...caps, lazyMaxRaw: 99, lazyChunkCaps: { chart: 100 } })).passed).toBe(true);
+    expect((await measurePerformanceBudget(dist, { ...caps, lazyMaxRaw: 100, lazyChunkCaps: { chart: 99 } })).rows.filter(row => !row.passed).map(row => row.key)).toEqual(["lazy/chart"]);
     expect((await measurePerformanceBudget(dist, { ...caps, totalRaw: caps.totalRaw - 1 })).rows.filter(row => !row.passed).map(row => row.key)).toEqual(["totalRaw"]);
     await expect(measurePerformanceBudget(dist, expected as any)).rejects.toThrow("lazyMaxRaw");
   });

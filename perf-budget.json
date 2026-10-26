@@ -4,8 +4,12 @@
     "readerRaw": 115500,
     "readerGzip": 30300,
     "editorRaw": 330000,
-    "editorGzip": 101900,
-    "totalRaw": 2699000,
-    "lazyMaxRaw": 46000
+    "editorGzip": 102200,
+    "totalRaw": 3413000,
+    "lazyMaxRaw": 46000,
+    "lazyChunkCaps": {
+      "video-encode": 467000,
+      "visuals": 48000
+    }
   }
 }

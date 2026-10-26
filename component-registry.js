@@ -44,7 +44,22 @@ function uiList(value, max = UI_MAX_ITEMS) {
 // Tones every component shares; each maps to tokens.css --color-<tone>-bg/fg.
 export const UI_TONES = ["neutral", "info", "success", "warning", "danger", "accent"];
 
-const uiHelpers = { esc: uiEsc, rich: uiRich, str: uiStr, oneOf: uiOneOf, list: uiList, TONES: UI_TONES };
+// The words a component draws itself (axis names, "목표", "각주", counts) follow the language of its own data: data
+// written in English with no Hangul reads in English, anything else in Korean as before. h.t(ko, en) picks one; h.en
+// tells which. renderComponentBlock sets it per block, so an English page draws English chrome without any page setting.
+export function uiDataIsEnglish(data) {
+  const text = JSON.stringify(data ?? "");
+  return !/[\uac00-\ud7a3\u3131-\u318e]/.test(text) && /[A-Za-z]{3}/.test(text.replace(/"(?:ui|preset|palette|tone|kind|style|state|variant|size|height|key|status|art|pattern|color|icon|language)":"[^"]*"|"[A-Za-z]+":/g, ""));
+}
+// What the page around a component knows (renderComponentBlock's second argument, set only while it draws):
+//   page.footnotes - Map note id -> number, in the order the page's text cites [^id] (block-html.js footnoteOrder)
+//   page.heading   - text of the heading right above the block; titleShown(t) is false when the block's own title repeats it
+// Without it (editor previews, the catalog) every component draws as it always did.
+export function headingKey(text) {
+  return String(text ?? "").replace(/<[^>]*>|[*_`]/g, "").replace(/^\s*(?:\d+(?:\.\d+)*\.?|[IVX]+\.)\s+/, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+const uiHelpers = { esc: uiEsc, rich: uiRich, str: uiStr, oneOf: uiOneOf, list: uiList, TONES: UI_TONES, en: false, t: (ko, en) => (uiHelpers.en ? en : ko), page: null,
+  titleShown: (title) => !(uiHelpers.page && uiHelpers.page.heading && headingKey(title) === headingKey(uiHelpers.page.heading)) };
 
 // Shared drawing code for a family (the chart engine, diagram layout) joins the helpers every render gets as h.<name>.
 // Files load sorted, so a helper file is named components/_<name>.js and registers before the components using it.
@@ -140,6 +155,26 @@ export function componentData(block) {
   return { comp, ok, data: { ...(comp ? comp.defaults : {}), ...(preset || {}), ...(parsed || {}) } };
 }
 
+// Footnote references (acard-footnote-fix): body text cites a note as [^id] (the markdown footnote mark), id being a
+// block-footnotes note id. Numbers follow the order the text first cites each note, so moving a sentence renumbers the
+// page. A page without a footnotes block, or a mark naming no note, gets an empty map and its text stays as written.
+export const FOOTNOTE_REF = /\[\^([A-Za-z0-9_-]{1,100})\]/g;
+const FOOTNOTE_TEXT_TYPES = new Set(["paragraph", "heading1", "heading2", "heading3", "heading4", "bulleted", "numbered", "to_do", "toggle", "callout", "quote"]);
+export function footnoteOrder(blocks) {
+  const list = Array.isArray(blocks) ? blocks : [], notes = new Set(), order = new Map();
+  for (const block of list) {
+    if (!block || block.type !== "component" || !block.meta || block.meta.ui !== "block-footnotes") continue;
+    const notesData = componentData(block).data.notes;
+    for (const note of Array.isArray(notesData) ? notesData : []) if (note && typeof note.id === "string") notes.add(note.id);
+  }
+  if (!notes.size) return order;
+  for (const block of list) {
+    if (!block || !FOOTNOTE_TEXT_TYPES.has(block.type) || typeof block.text !== "string") continue;
+    for (const match of block.text.matchAll(FOOTNOTE_REF)) if (notes.has(match[1]) && !order.has(match[1])) order.set(match[1], order.size + 1);
+  }
+  return order;
+}
+
 // Fallback card for anything the reader cannot draw: an unknown block type, an unknown component, or a component whose
 // renderer throws. It shows what the block is and its text, never raw HTML, so a rollback or a typo never breaks a page.
 export function fallbackCardHtml(kind, text) {
@@ -148,14 +183,22 @@ export function fallbackCardHtml(kind, text) {
     (body ? '<pre class="ui-fallback-text">' + uiEsc(body.length > 600 ? body.slice(0, 600) + "…" : body) + "</pre>" : '<span class="ui-fallback-empty">이 블록은 이 화면에서 아직 그릴 수 없어요.</span>') + "</div>";
 }
 
-export function renderComponentBlock(block) {
+export function renderComponentBlock(block, page) {
   const { comp, ok, data } = componentData(block);
   const ui = String((block && block.meta && block.meta.ui) || "");
   if (!comp) return fallbackCardHtml(ui ? "컴포넌트 " + ui : "컴포넌트", block && block.text);
   try {
     // Malformed JSON still draws the component with its defaults, flagged for the editor (data-ui-invalid).
     const preset = UI_PRESETS.includes(data.preset) ? ' data-preset="' + data.preset + '"' : "";
-    return '<div class="ui ui-' + comp.id + '" data-ui="' + comp.id + '"' + preset + (ok ? "" : ' data-ui-invalid="1"') + ">" + comp.render(data, uiHelpers) + "</div>";
+    const en = uiDataIsEnglish(data);
+    uiHelpers.en = en;
+    uiHelpers.page = page && typeof page === "object" ? page : null;
+    try {
+      return '<div class="ui ui-' + comp.id + '" data-ui="' + comp.id + '"' + (en ? ' lang="en"' : "") + preset + (ok ? "" : ' data-ui-invalid="1"') + ">" + comp.render(data, uiHelpers) + "</div>";
+    } finally {
+      uiHelpers.en = false;
+      uiHelpers.page = null;
+    }
   } catch {
     return fallbackCardHtml("컴포넌트 " + comp.id, block && block.text);
   }

@@ -210,7 +210,7 @@ test("recent editor previews are identity scoped and guest or missing identities
     const preview: unknown[] = [], locks: Promise<unknown>[] = [];
     const doc = { inert: false, replaceChildren() {} }, listeners = new Map();
     const editor = { slug: "one", state: {}, setSave() {}, provide() {}, api: async () => ({ pages: [] }) };
-    const document = { querySelector: () => id ? { content: id } : null, getElementById: () => doc, documentElement: { dataset: {} } };
+    const document = { cookie: id ? "acard_id=" + id : "", querySelector: () => id ? { content: id } : null, getElementById: () => doc, documentElement: { dataset: {} } };
     const context: any = { Response, Promise, document, caches, localStorage: { getItem: () => "epoch" }, navigator: { locks: { request: (_name: string, fn: () => Promise<unknown>) => {
       const work = fn(); locks.push(work); work.then(() => cached.resolve()); return work;
     } } }, setTimeout: () => 1, location: { replace() {} }, AcardEditor: editor, addEventListener: (name: string, fn: unknown) => listeners.set(name, fn) };

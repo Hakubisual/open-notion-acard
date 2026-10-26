@@ -62,7 +62,7 @@ test("valid public link renders exactly one page without private navigation or a
   expect(html).toContain("Shared title");
   expect(html).toContain("Only the shared page body.");
   expect(html).toContain("private-page");
-  expect(html).toContain('src="' + link.url + "/media/" + mediaId + '"');
+  expect(html).toMatch(new RegExp('src="' + link.url + "/media/" + mediaId + '\\?k=\\d+\\.[A-Za-z0-9_-]{43}"'));
   for (const hidden of ["Other page secret title", "Secret comment text", "sidebar", "backlinks", "/edit/", "javascript:", "tracker.test", "<iframe", "<script", 'href="/private-page/', 'href="https://notes.test/private-page/', 'data-page=']) expect(html).not.toContain(hidden);
 });
 
@@ -94,9 +94,12 @@ test("non-read methods fail identically before token lookup", async () => {
 
 test("only embedded media is accessible and removing a reference removes access", async () => {
   const link = await create();
-  expect((await request(link.url + "/media/" + mediaId)).status).toBe(200);
+  const signed = new RegExp(link.url + "/media/" + mediaId + "\\?k=[0-9]+\\.[A-Za-z0-9_-]{43}").exec(await (await request(link.url)).text())![0];
+  expect((await request(signed)).status).toBe(200);
+  expect((await request(link.url + "/media/" + mediaId)).status).toBe(302);
   expect((await request(link.url + "/media/" + otherId)).status).toBe(404);
   h.sqlite.query("DELETE FROM blocks WHERE page = 'shared' AND id = 'i'").run();
+  expect((await request(signed)).status).toBe(404);
   expect((await request(link.url + "/media/" + mediaId)).status).toBe(404);
 });
 

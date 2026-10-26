@@ -1,0 +1,17 @@
+/* Privacy policy and terms pages (ko/en/zh). */
+.legal { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; color: var(--ink-2); line-height: 1.7; }
+.legal h1 { font-size: var(--fs-32,32px); margin: 24px 0 8px; color: var(--ink); }
+.legal h2 { font-size: var(--fs-19,19px); margin: 36px 0 8px; color: var(--ink); scroll-margin-top: 16px; }
+.legal h3 { font-size: var(--fs-16,16px); margin: 20px 0 6px; color: var(--ink); }
+.legal .updated { color: var(--faint); font-size: var(--fs-14,14px); }
+.legal .lead { padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); }
+.legal .toc { padding-left: 20px; }
+.legal .toc li { margin: 2px 0; }
+.legal ul, .legal ol { padding-left: 20px; }
+.legal .tbl { overflow-x: auto; margin: 10px 0; }
+.legal table { border-collapse: collapse; width: 100%; font-size: var(--fs-14,14px); }
+.legal th, .legal td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.legal th { background: var(--bg-2, rgba(127,127,127,.06)); color: var(--ink); font-weight: 600; }
+.legal hr { border: 0; border-top: 1px solid var(--line); margin: 56px 0; }
+.legal a { color: var(--accent); }
+.legal .brand { display: inline-flex; gap: 8px; align-items: center; font-weight: 700; color: var(--ink); }

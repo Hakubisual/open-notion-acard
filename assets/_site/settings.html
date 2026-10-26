@@ -8,6 +8,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="preload" href="/fonts/pretendard-core.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
 <link rel="stylesheet" href="/_site/auth.css">
 <link rel="stylesheet" href="/_site/onboarding.css">
@@ -48,6 +49,8 @@
     <section class="ai-usage" id="import"><h2>가져오기</h2><p class="hint">노션이나 옵시디언에서 페이지를 옮겨 와요. 링크·이미지·파일·데이터베이스가 같이 들어와요.</p><a class="btn btn-wide" href="/import">가져오기 열기</a></section>
     <section class="ai-usage" id="my-data"><h2>내 데이터 내려받기</h2><p class="hint">모든 페이지와 이미지를 zip 파일 하나로 받아요. Acard 로컬판에서 그대로 복원할 수 있어요.</p><a class="btn btn-wide" href="/api/cloud/export" download>zip 으로 내려받기</a></section>
     <section class="ai-usage" id="ai-usage" hidden aria-live="polite"><h2>AI 사용량</h2><p id="ai-usage-month"></p><p class="hint" id="ai-usage-day"></p></section>
+    <section class="ai-usage danger-zone" id="delete-account"><h2>계정 삭제</h2><p class="hint">계정을 지우면 되돌릴 수 없어요. 아래가 모두 함께 지워져요.</p><ul class="delete-list"><li>계정과 로그인 정보, 프로필</li><li>웹 앱의 모든 페이지와 이미지·파일</li><li>공유 링크, 게시한 페이지, 클라우드 백업</li><li>대기자·피드백·AI 사용 기록</li></ul><p class="hint">필수 동의를 받은 기록만 동의 사실 증명을 위해 1년 보관한 뒤 지워요. 로컬판 데이터는 내 PC 에 있어서 지워지지 않아요.</p><p class="hint">지우기 전에 백업해 두세요. 모든 페이지와 이미지를 zip 파일 하나로 받을 수 있어요.</p><div class="plan-actions"><a class="btn" href="/api/cloud/export" download>백업 먼저 받기</a><button class="btn btn-danger" type="button" id="delete-open">계정 삭제</button></div><form class="delete-form" id="delete-form" hidden novalidate><div class="field"><label for="delete-confirm">확인을 위해 이메일 주소나 "삭제"를 입력해 주세요</label><input class="input" id="delete-confirm" autocomplete="off" autocapitalize="off" spellcheck="false"></div><div class="plan-actions"><button class="btn" type="button" id="delete-cancel">취소</button><button class="btn btn-danger" type="submit" id="delete-go" disabled>계정 영구 삭제</button></div><div class="msg" id="delete-msg" role="status"></div></form></section>
+    <template id="deleted-tpl"><div class="deleted-done" id="deleted" role="status"><h1>계정을 삭제했어요</h1><p class="sub">계정과 웹 앱의 글·파일을 모두 지우고 로그아웃했어요. 그동안 Acard 를 써 주셔서 고마워요.</p><a class="btn btn-primary btn-wide" href="/">처음 화면으로</a></div></template>
   </div>
 </main>
 <script src="/_site/settings.js" defer></script>

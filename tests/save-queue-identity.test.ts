@@ -150,7 +150,7 @@ function startup(kind = "note", create = true) {
   const state: any = { title: "", blocks: [], dirty: false };
   const database = { database: { slug: "db", title: "DB" }, properties: [], rows: [], views: [], templates: [] };
   const page = { page: { title: "Server", kind, updated: 10, source: "editor" }, blocks: [], database, ...(kind === "db_row" ? { dbRow: "row-1" } : {}) };
-  const context: any = { state, els, slug: "page", URLSearchParams, location: { search: create ? "?create" : "", pathname: "/edit/page/", hash: "", replace() {} },
+  const context: any = { state, els, transaction: null, slug: "page", URLSearchParams, location: { search: create ? "?create" : "", pathname: "/edit/page/", hash: "", replace() {} },
     history: { state: null, replaceState() {} }, document: { getElementById: node, createElement: node, addEventListener: (name: string, fn: Function) => { events[name] = fn; } },
     window: { AcardEditor: {}, DoriSite: { name: "Test" }, DoriDB: { load: (...args: any[]) => { loads.push(args); }, loadRow: (...args: any[]) => { loads.push(args); } }, mountEditorPages() {}, mountEditorFormat() {} },
     api: async (path: string) => { requests.push(path); if (path === "/pages") return created.promise; if (path === "/page/page") return page; return null; },
@@ -190,6 +190,7 @@ test("database editor and row editor pass their page payload to DoriDB", async (
 
 for (const finishBeforeAck of [true, false]) test(`two tabs sharing the journal never restore startup over NEWER_X (${finishBeforeAck ? "in flight" : "acknowledged"})`, async () => {
   const localStorage = localStore(), requests: any[] = [];
+  let writer = 0;
   let server = { page: { title: "Title", kind: "note", updated: 10, source: "editor" }, blocks: draft("original").blocks };
   function tab(preview = false) {
     const ready = deferred(), previewed = deferred(), finishLoad = deferred(), sending = deferred(), acknowledge = deferred();
@@ -199,16 +200,16 @@ for (const finishBeforeAck of [true, false]) test(`two tabs sharing the journal 
     const els: any = { title: node(), blocks: node(), meta: node(), save: node() };
     const state: any = { title: "", blocks: [], dirty: false, saving: false, baseUpdated: null };
     const initial = structuredClone(server);
-    const editor: any = { slug: "page", state, render() {},
+    const editor: any = { slug: "page", writerId: "tab-" + (++writer), state, render() {},
       on: (name: string, fn: Function) => { (listeners[name] ||= []).push(fn); },
       setSave: (text: string) => { els.save.dataset.text = text; },
       provide: (_: string, value: any) => { editor.transport = value.send; },
       api: async () => structuredClone(server) };
-    const context: any = { state, els, slug: "page", URLSearchParams, Response,
+    const context: any = { state, els, slug: "page", URLSearchParams, Response, CustomEvent,
       location: { search: "", pathname: "/edit/page/", hash: "" },
-      document: { querySelector: () => ({ content: "member-a" }), getElementById: () => els.save,
+      document: { cookie: "acard_id=member-a", querySelector: () => ({ content: "member-a" }), getElementById: () => els.save,
         addEventListener: (name: string, fn: Function) => { events[name] = fn; } },
-      window: { AcardEditor: editor, localStorage, addEventListener() {}, DoriSite: { name: "Test" }, mountEditorPages() {}, mountEditorFormat() {} },
+      window: { AcardEditor: editor, localStorage, addEventListener() {}, dispatchEvent() {}, DoriSite: { name: "Test" }, mountEditorPages() {}, mountEditorFormat() {} },
       navigator: { onLine: true }, MutationObserver: class { observe() {} },
       setTimeout: (fn: Function) => { timers.set(++timer, fn); return timer; }, clearTimeout: (id: number) => timers.delete(id),
       api: async (path: string) => path === "/page/page" ? initial : null,
@@ -239,13 +240,14 @@ for (const finishBeforeAck of [true, false]) test(`two tabs sharing the journal 
       editorSource.slice(editorSource.indexOf("  var previewHash;"), editorSource.lastIndexOf("})();")), context);
     events.DOMContentLoaded();
     return { state, ready, previewed, finishLoad, sending, acknowledge,
+      journal: () => JSON.parse(localStorage.getItem("acard-save-queue:member-a:writer:" + JSON.stringify([editor.writerId, "page", ""]))!),
       edit: (text: string) => {
         state.blocks[0].text = text; context.scheduleSave();
         return context.save();
       } };
   }
   const one = tab(); await one.ready.promise; await one.edit("BASE_PRIMED");
-  expect(JSON.parse(localStorage.getItem("acard-save-queue:member-a:page")!).payload).toBeNull();
+  expect(one.journal().payload).toBeNull();
   const two = tab(true); await two.previewed.promise;
   const saving = two.edit("NEWER_X"); await two.sending.promise;
   if (finishBeforeAck) {
@@ -261,7 +263,103 @@ for (const finishBeforeAck of [true, false]) test(`two tabs sharing the journal 
   ]);
   expect(server.blocks[0].text).toBe("NEWER_X");
   expect(two.state.blocks[0].text).toBe("NEWER_X");
-  expect(JSON.parse(localStorage.getItem("acard-save-queue:member-a:page")!).payload).toBeNull();
+  expect(two.journal().payload).toBeNull();
+  expect(one.journal().payload).toBeNull();
+});
+
+test("API classifies transport and offline failures without admitting HTTP or abort failures", async () => {
+  const make = (net: Function) => new Function("net", section("  function api(path", "  var lazyPending") + "return api;")(net);
+  await expect(make(() => Promise.reject(new TypeError("network")))("/page/a")).rejects.toMatchObject({ acardFailure: "network" });
+  const abort = new DOMException("cancelled", "AbortError");
+  await expect(make(() => Promise.reject(abort))("/page/a")).rejects.toBe(abort);
+  expect("acardFailure" in abort).toBe(false);
+  for (const status of [401, 403, 404, 500, 503]) {
+    await expect(make(() => Promise.resolve(Response.json({ error: "denied" }, { status })))("/page/a")).rejects.toMatchObject({ acardFailure: "http", status });
+  }
+  await expect(make(() => Promise.resolve(Response.json({}, { headers: { "x-acard-offline": "1", "x-acard-id": "member-a" } })))("/page/a")).rejects.toMatchObject({ acardFailure: "offline-cache", acardIdentity: "member-a" });
+  expect(await make(() => Promise.resolve(new Response("invalid JSON")))("/page/a")).toEqual({});
+});
+
+test("delta transport rechecks identity after asynchronous baseline loading", async () => {
+  const baseline = deferred(), started = deferred();
+  let current = true, writes = 0;
+  const editor: any = { slug: "page", saveQueue: { isCurrent: () => current },
+    api: () => { started.resolve(null); return baseline.promise; },
+    provide: (_: string, value: any) => { editor.delta = value; } };
+  runInNewContext(lazySource, { window: { AcardEditor: editor }, Response, fetch: () => { writes++; return Response.json({ updated: 11 }); } });
+  const sending = editor.delta.send("page", draft("new"));
+  const outcome = sending.then(() => null, (error: Error) => error.message);
+  await started.promise;
+  current = false;
+  baseline.resolve({ page: { title: "Title", updated: 10 }, blocks: draft("old").blocks });
+  expect(await outcome).toBe("Draft identity unavailable");
+  expect(writes).toBe(0);
+});
+
+test("explicit foreign draft recovery journals a new writer and retains the source revision", async () => {
+  const api = queueApi(), local = localStore();
+  const source = api.create({ identity: "member-a", writerId: "old", storage: api.storage(local, null, "member-a"), send: async () => Response.json({}) });
+  await source.ready;
+  source.enqueue("page", draft("offline typing", 12));
+  const target = api.create({ identity: "member-a", writerId: "new", storage: api.storage(local, null, "member-a"), send: async () => Response.json({}) });
+  await target.ready;
+  const candidates = await target.recoveryDrafts();
+  const restored = await target.restoreDraft(candidates[0]);
+  expect(restored).toMatchObject({ writerId: "new", base_updated: 12, payload: draft("offline typing", 12) });
+  expect(target.suspended()).toBe(true);
+  expect((await target.recoveryDrafts())[0].payload).toEqual(draft("offline typing", 12));
+  expect(JSON.parse(local.getItem('acard-save-queue:member-a:writer:["new","page",""]')!).payload).toEqual(draft("offline typing", 12));
+});
+
+test("draft recovery does not complete before durable storage and rejects a failed write", async () => {
+  const api = queueApi(), write = deferred();
+  const source = { slug: "page", acard_id: "member-a", writerId: "old", sequence: 1, base_updated: 12, payload: draft("recover", 12) };
+  let finishWrite: (error: Error) => void = () => {};
+  const persisted = new Promise((_, reject) => { finishWrite = reject; });
+  const target = api.create({ identity: "member-a", writerId: "new", storage: {
+    read: () => [source], write: () => { write.resolve(null); return persisted; }
+  }, send: async () => Response.json({}) });
+  await target.ready;
+  let completed = false;
+  const outcome = target.restoreDraft(source).then(() => { completed = true; return null; }, (error: Error) => error.message);
+  await write.promise;
+  expect(completed).toBe(false);
+  expect(target.suspended()).toBe(true);
+  finishWrite(Error("storage unavailable"));
+  expect(await outcome).toBe("storage unavailable");
+  expect(completed).toBe(false);
+  expect((await target.recoveryDrafts())[0].payload).toEqual(draft("recover", 12));
+});
+
+test("typing during recovery persistence prevents replacement with the older recovered draft", async () => {
+  const api = queueApi(), writing = deferred(), durable = deferred();
+  const source = { slug: "page", acard_id: "member-a", writerId: "old", sequence: 1, base_updated: 12, payload: draft("recover", 12) };
+  let writes = 0;
+  const target = api.create({ identity: "member-a", writerId: "new", storage: {
+    read: () => [source], write: () => { if (++writes === 1) { writing.resolve(null); return durable.promise; } }
+  }, send: async () => Response.json({}) });
+  await target.ready;
+  const outcome = target.restoreDraft(source).then(() => null, (error: Error) => error.message);
+  await writing.promise;
+  target.enqueue("page", draft("new typing", 12));
+  durable.resolve(null);
+  expect(await outcome).toBe("Draft changed while recovering");
+  expect(target.get("page").payload).toEqual(draft("new typing", 12));
+  expect((await target.recoveryDrafts())[0].payload).toEqual(draft("recover", 12));
+});
+
+for (const revision of [12, 13]) test(`recovered draft keeps its revision when reconnect baseline is ${revision}`, async () => {
+  const sent: unknown[] = [];
+  const editor: any = { slug: "page", state: { recoveredDraft: true }, base: { title: "Title", blocks: draft("cached", 10).blocks, updated: 10 },
+    api: async () => ({ page: { title: "Title", updated: revision }, blocks: draft("server").blocks }),
+    provide: (_: string, value: any) => { editor.delta = value; } };
+  runInNewContext(lazySource, { window: { AcardEditor: editor }, Response, fetch: async (_: string, options: { body: string }) => {
+    sent.push(JSON.parse(options.body)); return Response.json({ updated: 14 });
+  } });
+  const response = await editor.delta.send("page", draft("recovered", 12));
+  expect(response.status).toBe(revision === 12 ? 200 : 409);
+  if (revision === 12) expect(sent[0]).toMatchObject({ base_updated: 12, upserts: [{ text: "recovered" }] });
+  else expect(sent).toEqual([]);
 });
 
 test("beforeunload is attached only while dirty", () => {
@@ -276,7 +374,7 @@ test("beforeunload is attached only while dirty", () => {
 test("save retains the unload guard until acknowledgement and freezes the submitted draft", async () => {
   const started = deferred(), response = deferred<Response>(), submitted: any[] = [];
   const state: any = { title: "Title", blocks: draft("first").blocks, baseUpdated: 10, dirty: true };
-  const context: any = { state, slug: "page", created: Promise.resolve(), setSave() {}, loadBacklinks() {}, emitFeature() {},
+  const context: any = { state, transaction: null, slug: "page", created: Promise.resolve(), setSave() {}, loadBacklinks() {}, emitFeature() {},
     snapshot: () => JSON.stringify({ title: state.title, blocks: state.blocks }), apiResponse: (r: Response) => r.json(),
     window: { AcardEditor: { transport: async (_: string, payload: any) => {
       submitted.push(payload); started.resolve(null);
@@ -305,7 +403,17 @@ test("upload sends page, preserves image dimensions in the draft, and renders in
   const context: any = { slug: "page", FormData, created: Promise.resolve(), render() {}, setSave() {}, scheduleSave() {},
     downscaleImage: (file: File) => Promise.resolve(file), document: { createElement: node },
     net: async (_: string, options: any) => { requests.push(options); return new Response(JSON.stringify({ url: "/media/photo", name: "photo.png", size: 12, width: 640, height: 480 })); } };
-  runInNewContext(section("  function uploadFile", "  function focusedIndex") + section("  function mediaBlock", "  function embedSizer"), context);
+  const imageEditor = {
+    slug: "page", lazy: async () => context.imageTools, provide: (_name: string, value: unknown) => { context.imageTools = value; },
+    render() {}, setSave() {}, scheduleSave() {}
+  };
+  context.URL = URL;
+  context.Image = class { width = 640; height = 480; onload = () => {}; set src(_value: string) { queueMicrotask(() => this.onload()); } };
+  context.window = { AcardEditor: imageEditor, AcardEditorProvider: { fetch: context.net } };
+  context.lazy = imageEditor.lazy;
+  context.featureError = (error: Error) => { throw error; };
+  runInNewContext(readFileSync(new URL("../assets/features/lazy/image-tools.js", import.meta.url), "utf8"), context);
+  runInNewContext(section("  function uploadInto", "  function focusedIndex") + section("  function mediaBlock", "  function embedSizer"), context);
   const block: any = { type: "image", meta: { width: 70 } };
   await context.uploadInto(block, new File(["image"], "photo.png", { type: "image/png" }));
   expect(requests[0].body.get("page")).toBe("page"); expect(requests[0].body.get("file").name).toBe("photo.png");
@@ -318,16 +426,16 @@ test("upload sends page, preserves image dimensions in the draft, and renders in
 test("a 409 shows the conflict notice and retains the journal after another edit", async () => {
   const localStorage = localStore(), handlers: Record<string, Function> = {}, status: any = { textContent: "", dataset: {} };
   let calls = 0;
-  const editor: any = { slug: "page", state: { title: "Title", blocks: draft().blocks, baseUpdated: 10, dirty: true },
+  const editor: any = { slug: "page", writerId: "conflict", state: { title: "Title", blocks: draft().blocks, baseUpdated: 10, dirty: true },
     on: (name: string, fn: Function) => { handlers[name] = fn; }, setSave: (text: string) => { status.dataset.text = status.textContent = text; },
     transport: async () => { calls++; return new Response("{}", { status: 409 }); } };
   runInNewContext(queueSource, { window: { AcardEditor: editor, localStorage, addEventListener() {} }, Response,
-    document: { querySelector: () => ({ content: "member-a" }), getElementById: () => status, addEventListener() {} },
+    document: { cookie: "acard_id=member-a", querySelector: () => ({ content: "member-a" }), getElementById: () => status, addEventListener() {} },
     navigator: { onLine: true }, MutationObserver: class { observe() {} }, setTimeout() {}, clearTimeout() {} });
   await handlers.ready();
   await editor.transport("page", draft());
   expect(status.textContent).toContain("충돌");
-  expect(JSON.parse(localStorage.getItem("acard-save-queue:member-a:page")!).payload).toEqual(draft());
+  expect(JSON.parse(localStorage.getItem('acard-save-queue:member-a:writer:["conflict","page",""]')!).payload).toEqual(draft());
   handlers.change(draft("new typing"));
   await editor.transport("page", draft("new typing"));
   expect(calls).toBe(1); expect(status.textContent).toContain("충돌");

@@ -487,7 +487,9 @@ const VISUAL_FRAME_JS = '(function(){var R=document.documentElement,M=matchMedia
   + 'function lightOnly(){var all=document.body.getElementsByTagName("*"),area=0,big=Math.max(1,R.scrollWidth*R.scrollHeight),dark=0,text=0;for(var i=0;i<all.length&&i<800;i++){var e=all[i],s=getComputedStyle(e),b=lum(s.backgroundColor);if(b>.8){var r=e.getBoundingClientRect();area+=r.width*r.height}'
   + 'for(var n=e.firstChild;n;n=n.nextSibling)if(n.nodeType===3&&n.nodeValue.trim()){text++;var c=lum(s.color);if(c>=0&&c<.4)dark++;break}}return area/big>.25||(text>0&&dark/text>.5)}'
   + 'function theme(){var d=M.matches;R.setAttribute("data-theme",d?"dark":"light");R.classList.remove("acv-inv");if(d&&!hooks&&document.body&&lightOnly())R.classList.add("acv-inv")}'
-  + 'function h(){var v=Math.ceil(R.getBoundingClientRect().height+(innerHeight-R.clientHeight));if(v>0)parent.postMessage({acvH:v},"*")}'
+  // acvT: [text, top] of each nonempty heading, so the page can move its TOC anchors beside them (HTML block headings).
+  + 'function hs(){var o=[],l=document.body?document.body.querySelectorAll("h1,h2,h3,h4,h5,h6"):[];for(var i=0;i<l.length&&o.length<50;i++){var s=l[i].textContent.replace(/\\s+/g," ").trim().slice(0,200);if(s)o.push([s,Math.round(l[i].getBoundingClientRect().top+scrollY)])}return o}'
+  + 'function h(){var v=Math.ceil(R.getBoundingClientRect().height+(innerHeight-R.clientHeight));if(v>0)parent.postMessage({acvH:v,acvT:hs()},"*")}'
   + 'theme();h();if(M.addEventListener)M.addEventListener("change",function(){theme();h()});addEventListener("DOMContentLoaded",function(){theme();h();new ResizeObserver(h).observe(document.body)});addEventListener("load",function(){theme();h()});addEventListener("resize",h);new ResizeObserver(h).observe(R);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(h)})()';
 // Source that already handles the theme itself is never inverted.
 const THEME_HOOKS = /var\(--|prefers-color-scheme|data-theme/;
@@ -497,6 +499,32 @@ export function visualSrcdoc(source) {
 }
 // Page side: size a frame to the height it reported. Shared by the reader, the editor preview and shared pages.
 export const VISUAL_MAX_HEIGHT = 20000;
+// Page side: move an HTML block's hidden heading anchors (.acv-heads, right before its iframe f) to the tops the frame
+// reported (t = acvT), matched by text in order. A heading the frame did not report (a script-made change) keeps the
+// frame's top, so its TOC link still lands on the block. Self-contained: inline page scripts carry its source text.
+export function placeHeads(f, t) {
+  var a = f.previousElementSibling, j = 0;
+  if (!a || a.className !== "acv-heads" || !Array.isArray(t)) return;
+  [].forEach.call(a.children, function (n) {
+    for (var k = j; k < t.length; k++) if (t[k] && t[k][0] === n.textContent) { n.style.top = Math.max(0, +t[k][1] || 0) + "px"; j = k + 1; return; }
+  });
+}
+// The same, as source for inline scripts that have the frame f and its message e in scope. One line: HTML parsing turns
+// CR LF into LF inside <script>, so a CRLF checkout would no longer match a shared page's CSP hash of this text.
+export const VISUAL_PLACE_HEADS = "(" + String(placeHeads).replace(/\s*\n\s*/g, "") + ")(f,e.data.acvT);";
+const HEAD_STYLE = "position:absolute;top:0;height:0;margin:0;overflow:hidden;scroll-margin-top:72px";
+// Headings inside an HTML block, as hidden anchors the page's TOCs list and scroll to (h1 -> h2 like a heading1 block,
+// h5/h6 -> h5). ids is the list block-html.js made (unique with the page's own headings), or true in the editor preview,
+// where the anchors are block-<block id>-h<index>; without ids (agent previews, journal) there are no anchors.
+// aria-hidden: screen readers already read the headings inside the frame.
+function headAnchors(block, fid, ids) {
+  const list = ids && block.type === "html" ? htmlHeadings(block.text) : [];
+  if (!list.length) return "";
+  return '<div class="acv-heads" aria-hidden="true" style="position:relative;height:0">' + list.map((h, i) => {
+    const tag = "h" + Math.min(5, h.level + 1);
+    return "<" + tag + ' id="' + esc(Array.isArray(ids) ? ids[i] : "block-" + block.id + "-h" + i) + '" class="acv-head" style="' + HEAD_STYLE + '">' + esc(h.text) + "</" + tag + ">";
+  }).join("") + "</div>";
+}
 
 function figure(type, inner, meta, fallback) {
   const caption = meta && meta.caption ? String(meta.caption) : "";
@@ -506,8 +534,27 @@ function failed(text, why) {
   return '<div class="acv-fail" role="note"><p>' + esc(why) + '</p><pre><code>' + esc(text) + "</code></pre></div>";
 }
 
-// One visual block -> HTML. uid keeps marker ids unique within a page.
-export function visualBlockHtml(block, uid) {
+// Headings written in an HTML block's source, for the page's tables of contents. Static markup only: comment, script,
+// style and template bodies are skipped; the text is tags-stripped, entity-decoded and whitespace-collapsed like the
+// frame's own report (hs() above), so the two lists match by text. Up to 50 per block.
+const HTML_ENTITY = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" };
+export function htmlHeadings(source) {
+  const text = String(source || "");
+  const out = [], re = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi;
+  const clean = text.replace(/<!--[\s\S]*?-->|<(script|style|template|textarea|title|noscript)\b[\s\S]*?<\/\1\s*>/gi, "");
+  for (let m; (m = re.exec(clean)) && out.length < 50; ) {
+    const label = m[2].replace(/<[^>]*>/g, "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, c) => {
+      if (c[0] !== "#") return HTML_ENTITY[c.toLowerCase()] || all;
+      const n = c[1] === "x" || c[1] === "X" ? parseInt(c.slice(2), 16) : Number(c.slice(1));
+      return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : all;
+    }).replace(/\s+/g, " ").trim().slice(0, 200);
+    if (label) out.push({ level: Number(m[1]), text: label });
+  }
+  return out;
+}
+
+// One visual block -> HTML. uid keeps marker ids unique within a page; headIds names an HTML block's heading anchors.
+export function visualBlockHtml(block, uid, headIds) {
   const meta = block.meta || {};
   const name = String(meta.alt || meta.caption || "");
   if (block.type === "diagram") {
@@ -525,8 +572,9 @@ export function visualBlockHtml(block, uid) {
     if (new TextEncoder().encode(source).length > VISUAL_MAX_BYTES) return figure(block.type, failed(source.slice(0, 400), "64KB 를 넘어서 보여 주지 않아요."), meta, true);
     const height = Number.isFinite(meta.height) ? Math.max(120, Math.min(1200, Math.trunc(meta.height))) : 320;
     const fid = "acv-f" + String(uid).replace(/[^\w-]/g, "");
-    const resize = '<script>addEventListener("message",function(e){var f=document.getElementById("' + fid + '"),h=e.data&&+e.data.acvH;if(f&&e.source===f.contentWindow&&h>0)f.style.height=Math.min(' + VISUAL_MAX_HEIGHT + ',h)+"px"})</scr' + 'ipt>';
-    return figure(block.type, resize + '<iframe id="' + fid + '" class="acv-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="' + esc(name || (block.type === "html" ? "HTML 블록" : "시각 자료")) + '" style="display:block;width:100%;height:' + height + 'px;border:0;background:transparent" srcdoc="' + esc(visualSrcdoc(source)) + '"></iframe>', meta);
+    const heads = headAnchors(block, fid, headIds);
+    const resize = '<script>addEventListener("message",function(e){var f=document.getElementById("' + fid + '"),h=e.data&&+e.data.acvH;if(f&&e.source===f.contentWindow&&h>0){f.style.height=Math.min(' + VISUAL_MAX_HEIGHT + ',h)+"px";' + (heads ? VISUAL_PLACE_HEADS : "") + '}})</scr' + 'ipt>';
+    return figure(block.type, resize + heads + '<iframe id="' + fid + '" class="acv-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="' + esc(name || (block.type === "html" ? "HTML 블록" : "시각 자료")) + '" style="display:block;width:100%;height:' + height + 'px;border:0;background:transparent" srcdoc="' + esc(visualSrcdoc(source)) + '"></iframe>', meta);
   }
   return "";
 }

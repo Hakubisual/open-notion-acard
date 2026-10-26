@@ -123,7 +123,9 @@
     const label = "시작 가이드 진행률";
     const bar = '<div class="ui-progress wg-progress" role="progressbar" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="4" aria-valuenow="' + n + '"><i style="width:' + n * 25 + '%"></i></div>';
     if (guide.celebrate) {
-      return '<section class="ui-card wg-card wg-done" data-w="guide"><div class="wg-head"><span class="wg-icon">' + icon("spark") + '</span><div><h2>시작 가이드를 모두 마쳤어요</h2><p class="wg-sub">불편한 점이 있으면 화면 캡처로 알려 주세요</p></div></div><div class="wg-actions"><button type="button" class="ui-btn ui-btn-primary" data-guide-feedback>피드백 보내기</button><a class="wg-quiet" href="/guide">자세한 사용법</a></div></section>';
+      // issue 149: the new editing tools in one line (text from /api/guide), only when they are on.
+      const tools = guide.editTools ? '<p class="wg-sub wg-tools" data-guide-tools>' + esc(guide.editTools) + "</p>" : "";
+      return '<section class="ui-card wg-card wg-done" data-w="guide"><div class="wg-head"><span class="wg-icon">' + icon("spark") + '</span><div><h2>시작 가이드를 모두 마쳤어요</h2><p class="wg-sub">불편한 점이 있으면 화면 캡처로 알려 주세요</p>' + tools + "</div></div>" + '<div class="wg-actions"><button type="button" class="ui-btn ui-btn-primary" data-guide-feedback>피드백 보내기</button><a class="wg-quiet" href="/guide">자세한 사용법</a></div></section>';
     }
     if (guide.done) return "";
     if (guide.skipped) {
@@ -133,7 +135,7 @@
     const last = data && data.recent && data.recent.find((p) => p.kind !== "folder");
     const shareSlug = (data && data.checklist && data.checklist.shareSlug) || (last && last.slug) || "index";
     const rows = [
-      ["page", "첫 페이지 만들기", "제목만 써도 돼요", fresh],
+      ["page", "AI가 쓴 마크다운 붙여 넣기", "새 페이지에 붙여 넣으면 표·차트가 그려져요", fresh],
       ["slash", "/ 메뉴 열어 보기", "빈 줄에서 / 를 눌러요", s.page && last ? "/edit/" + encodeURIComponent(last.slug) + "/" : fresh],
       ["search", "검색 열어 보기", "Ctrl+K 로 어디서든", null],
       ["share", "공유 미리보기", "링크는 아직 만들지 않아요", href(shareSlug)],

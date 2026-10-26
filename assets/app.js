@@ -1,4 +1,4 @@
-(function(d,w){function c(h){if(!d.querySelector('[href="'+h+'"]')){var l=d.createElement("link");l.rel="stylesheet";l.href=h;d.head.append(l)}}w.acardFont=function(f){f=="serif"?c("/fonts/serif.css"):/^(?!default$|report$)[a-z]+$/.test(f)&&c("/fonts/lib/"+f+".css")};var m=d.querySelector("[data-font]");m&&w.acardFont(m.dataset.font);w.addEventListener("load",function(){setTimeout(c,99,"/fonts/fonts.css")})})(document,window);
+(function(d,w){function c(h){if(!d.querySelector('[href="'+h+'"]')){var l=d.createElement("link");l.rel="stylesheet";l.href=h;d.head.append(l)}}w.acardFont=function(f){f=="serif"?c("/fonts/serif.css"):/^(?!default$|report$)[a-z]+$/.test(f)&&c("/fonts/lib/"+f+".css")};var m=d.querySelector("[data-font]");m&&w.acardFont(m.dataset.font);c("/fonts/fonts.css")})(document,window);
 (function () {
   document.addEventListener("submit", function (event) {
     var form = event.target;

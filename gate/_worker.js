@@ -382,7 +382,8 @@ async function importMarkdown(request, db) {
     ord += 10;
     const title = baseName.slice(0, 200);
     // The page row and its blocks commit together, so a long file that fails midway leaves no empty page.
-    await saveBlocks(db, slug, await guardButtonBlocks(db, [], normaliseBlocks(markdownToBlocks(text, { meta: doc.flagged }))), {
+    const blocks = importSyncedBlocks(markdownToBlocks(text, { meta: doc.flagged }));
+    await saveBlocks(db, slug, await guardButtonBlocks(db, [], normaliseBlocks(blocks)), {
       before: [
         db.prepare("INSERT INTO pages (slug, title, parent, ord, kind, updated, source, hash) VALUES (?, ?, NULL, ?, 'note', ?, 'editor', NULL)").bind(slug, title, ord, now),
         db.prepare("INSERT INTO page_imports (page, kind, created) VALUES (?, 'md', ?) ON CONFLICT (page) DO NOTHING").bind(slug, now),
@@ -393,11 +394,17 @@ async function importMarkdown(request, db) {
   if (files.length > 40) warnings.push("한 번에 40개까지만 가져올 수 있어 나머지는 건너뛰었어요.");
   return json({ ok: true, imported: created.length, pages: created, skipped: [], warnings });
 }
+function syncedReadOptions(db, env, copying = false) {
+  return { principal: env?.ACARD_SAVE_PRINCIPAL ? { ...env.ACARD_SAVE_PRINCIPAL, kind: "agent" }
+    : { kind: db.acardRoles || db.acardVisible || env && isGuest(env) ? "guest" : "owner" }, export: copying };
+}
+
 async function exportPage(db, url, env) {
   const format = (url.searchParams.get("format") ?? "md").toLowerCase();
   const scope = url.searchParams.get("scope") ?? "page";
 
   if (scope === "all" || format === "zip") {
+    if (db.acardRoles || db.acardVisible || isGuest(env) || env?.ACARD_SAVE_PRINCIPAL) return json({ error: "workspace_export_requires_owner" }, 403);
     if (ACARD_FEATURES.services.exportZip) return await ACARD_FEATURES.services.exportZip(db, env);
     const rows = await db.prepare("SELECT slug, title FROM pages ORDER BY ord, title").all();
     const list = [];
@@ -425,9 +432,11 @@ async function exportPage(db, url, env) {
   const found = await readPage(db, slug);
   if (!found) return json({ error: "없는 페이지예요." }, 404);
   const title = String(found.page.title ?? slug);
+  const portable = format !== "acard-md" || db.acardRoles || db.acardVisible || isGuest(env) || env?.ACARD_SAVE_PRINCIPAL;
+  const expanded = portable ? materializeSyncedBlocks(found.blocks, await resolveSyncedBlocks(db, slug, found.blocks, syncedReadOptions(db, env, true))) : found.blocks;
 
   if (format === "html") {
-    return new Response(pageToHtml({ title, blocks: found.blocks }), {
+    return new Response(pageToHtml({ title, blocks: expanded }), {
       headers: { "content-type": "text/html; charset=utf-8", "content-disposition": exportFilename(slug, "html"), "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" },
     });
   }
@@ -435,13 +444,13 @@ async function exportPage(db, url, env) {
   // /api/import/md and MCP read back the same; md stays the Notion-style export without them.
   if (format === "acard-md") {
     // AI marks (acard-human-edit) are the editing person's metadata: left out unless the export is meant for re-import.
-    const blocks = url.searchParams.get("keep_ai") === "1" ? found.blocks : globalThis.AiMarks.stripMarks(found.blocks);
+    const blocks = url.searchParams.get("keep_ai") === "1" ? expanded : globalThis.AiMarks.stripMarks(expanded);
     return new Response(acardMarkdown(title, blocks), {
       headers: { "content-type": "text/markdown; charset=utf-8", "content-disposition": exportFilename(slug, "md"), "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" },
     });
   }
   if (format !== "md" && format !== "markdown") return json({ error: "format 은 md, acard-md, html, zip 중 하나여야 해요." }, 400);
-  return new Response(notionBlocksToMarkdown(title, found.blocks), {
+  return new Response(notionBlocksToMarkdown(title, expanded), {
     headers: { "content-type": "text/markdown; charset=utf-8", "content-disposition": exportFilename(slug, "md"), "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" },
   });
 }
@@ -503,6 +512,11 @@ function blockTooLong(type, text, index) {
 
 function normaliseBlocks(input) {
   if (!Array.isArray(input)) return [];
+  if (input.some(block => block?.type === "synced" || block?.meta?.synced)) {
+    if (input.length > 2000 || input.some(block => !block || !Number.isInteger(block.indent ?? 0) || (block.indent ?? 0) < 0 || (block.indent ?? 0) > 6 ||
+      (block.type === "synced" && (typeof block.id !== "string" || block.id.length > 60 || block.text !== "" || !cleanSyncedMeta(block.meta))) ||
+      (block.type !== "synced" && block.meta?.synced))) throw new AgentError("invalid_synced", 400);
+  }
   return input.slice(0, 2000).map((raw, index) => {
     const block = raw && typeof raw === "object" ? raw : {};
     const type = typeof block.type === "string" ? block.type.slice(0, 24) : "paragraph";
@@ -559,6 +573,10 @@ registerFeature({ afterSave: linkWikiTitles });
 
 // extra.before / extra.after ride in the same transaction as the blocks, so a page row and its blocks land together or not at all.
 async function saveBlocks(db, slug, blocks, extra) {
+  if (blocks.some(block => block.type === "synced")) {
+    const previous = await readPage(db, slug);
+    guardSyncedWrite(blocks, slug, previous?.blocks ?? []);
+  }
   const statements = [...(extra?.before ?? []), ...blockStatements(db, slug, blocks), ...(extra?.after ?? [])];
   // Postgres: one round trip for the whole replacement instead of one per statement.
   if (typeof db.script === "function") await db.script(statements);
@@ -583,6 +601,7 @@ async function saveAgentBlocks(db, slug, blocks, options) {
   for (;;) {
     const snapshot = await snapshotPage(db, slug);
     if (!snapshot) return false;
+    guardSyncedWrite(options.append ? [...snapshot.blocks, ...blocks] : blocks, slug, snapshot.blocks);
     if (options.append) blockLimit(blocks.length, snapshot.blocks.length);
     const claim = crypto.randomUUID();
     const guard = "EXISTS (SELECT 1 FROM pages WHERE slug = ? AND hash = ?)";
@@ -639,6 +658,10 @@ function multiRowInsert(db, head, width, rows, tail = []) {
 }
 
 function blockStatements(db, slug, blocks) {
+  if (blocks.some(block => block.type === "synced")) {
+    const invalid = validateSyncedBlocks(blocks, slug);
+    if (invalid) throw new AgentError(invalid.error, 400);
+  }
   const rows = blocks.map((block, index) => [slug, block.id, index, block.type, block.text, block.checked ? 1 : 0, block.indent, block.meta ? JSON.stringify(block.meta) : null]);
   // Locks the page row first, so two replacements of one page run one after the other. Without it, on Postgres the
   // second writer's DELETE ran before the first committed, missed its new rows, and its INSERT hit the same (page, id):
@@ -680,6 +703,11 @@ function scopedId(databaseId, local) {
 // db_ref 의 meta.html 은 서버가 렌더해 넣는 값이다. 클라이언트가 보낸 html 은 신뢰하지 않는다.
 function cleanMeta(type, meta) {
   if (!meta || typeof meta !== "object") return meta || null;
+  if (type === "synced") {
+    const clean = cleanSyncedMeta(meta);
+    if (!clean) throw new AgentError("invalid_synced", 400);
+    return clean;
+  }
   if (type !== "db_ref") return meta;
   const out = Object.assign({}, meta);
   delete out.html;
@@ -2038,12 +2066,14 @@ async function seedStamp(db) {
 }
 
 // 도리가 마크다운을 다시 배포했는지 확인한다. 새 빌드일 때만 시드를 읽어 반영한다.
-async function ensureMemberHome(db) {
+async function ensureMemberHome(db, env) {
   const claim = "home-" + crypto.randomUUID();
+  // issue 147: a local app with ACARD_LANG=en|zh names a new home page in that language; an existing home keeps its title.
+  const title = env && env.ACARD_LANG === "zh" ? "开始" : env && env.ACARD_LANG === "en" ? "Start" : "Home";
   // 멤버 홈은 항상 있어야 한다. 휴지통에 들어간 홈은 꺼내서 / 가 404 가 되지 않게 한다.
   await db.batch([
     db.prepare("DELETE FROM editor_trash WHERE page = 'index'"),
-    db.prepare("INSERT OR IGNORE INTO pages (slug, title, parent, ord, kind, updated, source, hash) SELECT 'index', 'Home', NULL, 0, 'note', ?, 'editor', ? WHERE NOT EXISTS (SELECT 1 FROM editor_trash WHERE page = 'index')").bind(Date.now(), claim),
+    db.prepare("INSERT OR IGNORE INTO pages (slug, title, parent, ord, kind, updated, source, hash) SELECT 'index', ?, NULL, 0, 'note', ?, 'editor', ? WHERE NOT EXISTS (SELECT 1 FROM editor_trash WHERE page = 'index')").bind(title, Date.now(), claim),
     db.prepare("INSERT INTO blocks (page, id, ord, type, text, checked, indent, meta) SELECT 'index', 'b1', 0, 'paragraph', '', 0, 0, NULL WHERE EXISTS (SELECT 1 FROM pages WHERE slug = 'index' AND hash = ?)").bind(claim),
     db.prepare("UPDATE pages SET hash = NULL WHERE slug = 'index' AND hash = ?").bind(claim),
   ]);
@@ -2077,7 +2107,7 @@ async function pageExtras(db, page, blocks, view) {
   const databases = new Map();
   const linked = [];
   for (const block of blocks) {
-    if (block.type === "db_ref" && block.meta && block.meta.database) linked.push(block);
+    if (block.type === "db_ref" && !block.syncedReadOnly && block.meta && block.meta.database) linked.push(block);
   }
   await Promise.all(linked.map(async (block) => {
     if (db.acardVisible && !db.acardVisible.has(String(block.meta.database))) { block.meta = Object.assign({}, block.meta, { html: "" }); return; }
@@ -2208,16 +2238,28 @@ function pageShell(page, blocks, pages, extras, settings = {}) {
 // POST /api/upload, GET /media/<id>, DELETE /api/media/<id>, GET /api/link-preview — 모두 게이트 쿠키 검사 뒤에서만 돈다.
 
 const MEDIA_BINDING = "MEDIA";
-const MEDIA_MAX_BYTES = 4 * 1024 * 1024;
+// One file is at most 50 MB for every account. /api/media-usage tells the
+// editor this number (uploadLimit), so the client never keeps its own copy. Small files still go up as one form and are
+// read whole (image compression needs the bytes); anything above MEDIA_BUFFER_BYTES must use the streamed upload
+// (POST /api/upload?stream=1, raw body), which goes to R2 without ever being held whole in the Worker.
+const MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+const MEDIA_BUFFER_BYTES = 4 * 1024 * 1024;
+// A streamed upload's ledger lease: settled by the request itself, or swept this long after it started (a request
+// cannot outlive it; the 15-minute cron on acard-workspace releases what a dead request left).
+const MEDIA_LEASE_MS = 60 * 60 * 1000;
 const MEDIA_ID = /^[0-9a-f]{16}$/;
-// Page icon / cover uploads (beta request 2026-10-20): images only, 10 MB each, 200 MB per member workspace and a hard
-// stop for all of Acard below the R2 free tier (10 GB): 50 beta users x 200 MB = 10 GB. The owner gets one mail at 8 GB.
+// Page icon / cover uploads (beta request 2026-10-20): images only, 10 MB each. A member workspace stops at its account's
+// media quota: env.ACARD_MEDIA_PLAN() (gate/cloud.ts MEDIA_TIERS: 500 MB free, 10 GB beta / free pass / subscription),
+// WORKSPACE_MEDIA_QUOTA when no plan is wired (tests, self-host). All of Acard stops at GLOBAL_MEDIA_CAP (same number as
+// gate/cloud.ts); R2 past 10 GB is $0.015 per GB-month. The owner gets one mail at each GLOBAL_MEDIA_ALERTS step.
 const LOOK_MAX_BYTES = 10 * 1024 * 1024;
 const LOOK_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const LOOK_WIDTH = { icon: 512, cover: 2400 };
-const WORKSPACE_MEDIA_QUOTA = 200 * 1000 * 1000;
-const GLOBAL_MEDIA_CAP = 9.5 * 1000 * 1000 * 1000;
-const GLOBAL_MEDIA_ALERT = 8 * 1000 * 1000 * 1000;
+const WORKSPACE_MEDIA_QUOTA = 500 * 1000 * 1000;
+const GLOBAL_MEDIA_CAP = 100 * 1000 * 1000 * 1000;
+const GLOBAL_MEDIA_ALERTS = [10, 30, 50, 80].map((gb) => gb * 1000 * 1000 * 1000);
+const R2_FREE_BYTES = 10 * 1000 * 1000 * 1000;
+const R2_USD_PER_GB_MONTH = 0.015;
 const LINK_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
 const LINK_MAX_BYTES = 512 * 1024;
 
@@ -2449,14 +2491,30 @@ async function workspaceMediaBytes(db) {
   return Number(row && row.n) || 0;
 }
 
-// The owner mail at 8 GB and at the 9.5 GB stop. `test` (the admin console's storage-alert test, acardHost.storageAlertTest)
-// sends the same mail with "[테스트]" in front of the subject. Returns Resend's answer ({ id } when it was accepted).
+// The quota of the account that owns this member workspace (gate/agent-entry.ts wires ACARD_MEDIA_PLAN). null when the
+// lookup failed: then only the global cap applies, so an outage never refuses a 10 GB account at 500 MB.
+async function mediaPlan(env) {
+  if (typeof env.ACARD_MEDIA_PLAN !== "function") return { tier: "free", quota: WORKSPACE_MEDIA_QUOTA, passUntil: null };
+  try { return await env.ACARD_MEDIA_PLAN(); } catch (error) { console.error("acard media plan lookup failed", String(error)); return null; }
+}
+
+function storageSize(bytes) {
+  return bytes >= 1e9 ? Number((bytes / 1e9).toFixed(1)) + "GB" : Math.round(bytes / 1e6) + "MB";
+}
+
+// Owner mails: one at each GLOBAL_MEDIA_ALERTS step (ledger alert level 1-4) and one at the GLOBAL_MEDIA_CAP stop (level 5).
+// `test` (the admin console's storage-alert test, acardHost.storageAlertTest) sends the mail for today's usage with
+// "[테스트]" in front of the subject. Returns Resend's answer ({ id } when it was accepted).
 export function storageAlertMail(env, used, stopped, test = false) {
   const gb = (used / 1e9).toFixed(2);
+  const monthly = Math.max(0, used - R2_FREE_BYTES) / 1e9 * R2_USD_PER_GB_MONTH;
+  const cost = "지금 R2 요금은 월 약 $" + monthly.toFixed(2) + " 예요(10GB 를 넘는 만큼 GB당 월 $" + R2_USD_PER_GB_MONTH + ").";
+  const step = GLOBAL_MEDIA_ALERTS.filter((n) => used >= n).pop();
+  const next = GLOBAL_MEDIA_ALERTS.find((n) => n > used);
   const text = stopped
-    ? "Acard 파일 저장 공간이 " + gb + "GB 로 무료 한도(10GB) 직전이라 새 업로드를 막았어요. 늘리려면 R2 요금(GB당 월 $0.015)을 감안해 GLOBAL_MEDIA_CAP 을 올려 주세요."
-    : "Acard 파일 저장 공간이 " + gb + "GB 예요. R2 무료 한도는 10GB 이고, 9.5GB 에서 새 업로드를 막아요.";
-  const subject = stopped ? "[Acard] 파일 저장 공간 업로드 중지" : "[Acard] 파일 저장 공간 8GB 넘음";
+    ? "Acard 파일 저장 공간이 " + gb + "GB 로 전체 상한(" + storageSize(GLOBAL_MEDIA_CAP) + ")에 닿아 새 업로드를 막았어요. " + cost + " 늘리려면 GLOBAL_MEDIA_CAP(gate/_worker.js, gate/cloud.ts)을 올려 주세요."
+    : "Acard 파일 저장 공간이 " + gb + "GB 예요. " + cost + " " + (next ? "다음 경고는 " + storageSize(next) + ", " : "") + "전체 상한 " + storageSize(GLOBAL_MEDIA_CAP) + "에서 새 업로드를 막아요. 많이 쓰는 계정은 관리자 콘솔 > 저장 공간에서 볼 수 있어요.";
+  const subject = stopped ? "[Acard] 파일 저장 공간 업로드 중지" : step ? "[Acard] 파일 저장 공간 " + storageSize(step) + " 넘음" : "[Acard] 파일 저장 공간 " + gb + "GB";
   return {
     from: env.MAIL_FROM || "Acard <beta@send.notes.example.com>",
     to: [env.OWNER_ALERT_EMAIL],
@@ -2474,7 +2532,8 @@ async function mailOwnerAboutStorage(env, used, stopped, test = false) {
       body: JSON.stringify(storageAlertMail(env, used, stopped, test)),
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok) console.error("acard storage alert mail refused", response.status, JSON.stringify(body));
+    // issue 165: the refusal's name only; Resend's message can quote the recipient address.
+    if (!response.ok) console.error("acard storage alert mail refused", response.status, String(body && body.name || ""));
     return { ok: response.ok, status: response.status, id: body && body.id ? String(body.id) : null };
   } catch (error) {
     console.error("acard storage alert mail failed", String(error));
@@ -2482,20 +2541,26 @@ async function mailOwnerAboutStorage(env, used, stopped, test = false) {
   }
 }
 
-// Every write of a media original goes through here: the member workspace quota first, then the global ledger, which
-// takes the bytes only if the total stays under GLOBAL_MEDIA_CAP. A refused upload stores nothing.
-async function reserveMedia(env, db, bytes) {
-  if (memberWorkspace(env) && (await workspaceMediaBytes(db)) + bytes > WORKSPACE_MEDIA_QUOTA) {
-    throw new AgentError("이 워크스페이스의 파일 저장 공간(200MB)을 다 썼어요. 안 쓰는 이미지를 지운 뒤 다시 올려 주세요.", 507);
+// Every write of a media original goes through here: the account's quota first, then the global ledger, which takes
+// the bytes only if the total stays under GLOBAL_MEDIA_CAP. A refused upload stores nothing.
+async function reserveMedia(env, db, bytes, lease) {
+  if (memberWorkspace(env)) {
+    const plan = await mediaPlan(env);
+    if (plan && (await workspaceMediaBytes(db)) + bytes > plan.quota) {
+      const whose = plan.tier === "free" ? "무료 계정의 " : "";
+      throw new AgentError(whose + "파일 저장 공간(" + storageSize(plan.quota) + ")을 다 썼어요. 안 쓰는 파일을 지운 뒤 다시 올려 주세요.", 507);
+    }
   }
   const ledger = mediaLedger(env);
   if (!ledger || typeof ledger.mediaUsage !== "function") return;
-  const result = await ledger.mediaUsage(bytes, GLOBAL_MEDIA_CAP);
+  const result = lease ? await ledger.mediaReserve(lease, bytes, GLOBAL_MEDIA_CAP, MEDIA_LEASE_MS) : await ledger.mediaUsage(bytes, GLOBAL_MEDIA_CAP);
+  const stopLevel = GLOBAL_MEDIA_ALERTS.length + 1;
   if (!result.ok) {
-    if (await ledger.mediaMarkAlerted(2)) await mailOwnerAboutStorage(env, result.used, true);
+    if (await ledger.mediaMarkAlerted(stopLevel)) await mailOwnerAboutStorage(env, result.used, true);
     throw new AgentError("Acard 전체 파일 저장 공간이 꽉 차서 지금은 올릴 수 없어요. 운영자에게 알렸어요.", 507);
   }
-  if (result.used >= GLOBAL_MEDIA_ALERT && result.alerted < 1 && await ledger.mediaMarkAlerted(1)) await mailOwnerAboutStorage(env, result.used, false);
+  const level = GLOBAL_MEDIA_ALERTS.filter((n) => result.used >= n).length;
+  if (level > result.alerted && await ledger.mediaMarkAlerted(level)) await mailOwnerAboutStorage(env, result.used, false);
 }
 
 // New png/jpeg originals (POST /api/upload and every agent image) are stored as WebP through the acard-image Worker
@@ -2538,11 +2603,121 @@ async function releaseMedia(env, bytes) {
   await ledger.mediaUsage(-bytes, Infinity).catch((error) => console.error("acard media ledger release failed", String(error)));
 }
 
+// What a file's first bytes say it is. Uploads keep the type the browser declared only when the bytes agree with it, so a
+// renamed program cannot be stored as a video. Types without a fixed signature (text/plain) pass on the declaration.
+export function sniffMedia(head) {
+  const b = new Uint8Array(head.slice(0, 16));
+  const text = (at, n) => String.fromCharCode(...b.subarray(at, at + n));
+  const image = sniffImage(head);
+  if (image) return image;
+  if (text(4, 4) === "ftyp") {
+    const brand = text(8, 4);
+    if (brand === "qt  ") return "video/quicktime";
+    if (/^(heic|heix|mif1|msf1)$/.test(brand)) return "image/heic";
+    if (/^M4A |^M4B /.test(brand)) return "audio/mp4";
+    return "video/mp4";
+  }
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return "video/webm";
+  if (text(0, 4) === "%PDF") return "application/pdf";
+  if (text(0, 4) === "OggS") return "audio/ogg";
+  if (text(0, 4) === "fLaC") return "audio/flac";
+  if (text(0, 4) === "RIFF" && text(8, 4) === "WAVE") return "audio/wav";
+  if (text(0, 4) === "RIFF" && text(8, 4) === "AVI ") return "video/x-msvideo";
+  if (text(0, 3) === "ID3" || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return "audio/mpeg";
+  return null;
+}
+
+// Declared type vs bytes for a streamed upload: the family (video/audio/image/pdf) must match, and the stored type is the
+// sniffed one (a .mov sent as video/mp4 is stored as quicktime). mp4 audio/video share the ftyp box, so either counts.
+export function streamMime(declared, head) {
+  const type = baseMime(declared);
+  if (!isAllowedMime(type) || type === "image/svg+xml" || type === "text/plain") return null;
+  const found = sniffMedia(head);
+  if (!found) return null;
+  const family = (mime) => (mime === "application/pdf" ? "pdf" : mime.split("/")[0]);
+  if (found === "audio/mp4" || found === "video/mp4") return /^(video|audio)\//.test(type) ? (type.startsWith("audio/") ? "audio/mp4" : found) : null;
+  return family(found) === family(type) ? found : null;
+}
+
+// Passes every byte through and, once the first `size` bytes went by (or the stream ended sooner), calls check(head). A
+// check that throws errors the stream there, so the R2 put that reads it fails and nothing is stored; `decided`
+// resolves with what check returned. The head is all that is ever held.
+function headTap(size, check) {
+  let seen = new Uint8Array(0), done = false, settle, fail;
+  const decided = new Promise((resolve, reject) => { settle = resolve; fail = reject; });
+  const decide = () => {
+    done = true;
+    try { settle(check(seen.buffer)); }
+    catch (error) { fail(error); throw error; }
+  };
+  const tap = new TransformStream({
+    transform(chunk, controller) {
+      if (!done) {
+        const next = new Uint8Array(Math.min(size, seen.length + chunk.byteLength));
+        next.set(seen); next.set(chunk.subarray(0, next.length - seen.length), seen.length);
+        seen = next;
+        if (seen.length >= size) decide();
+      }
+      controller.enqueue(chunk);
+    },
+    flush() { if (!done) decide(); },
+  });
+  return { tap, decided };
+}
+
+// POST /api/upload?stream=1 (editor files over MEDIA_BUFFER_BYTES, up to MEDIA_MAX_BYTES): the raw file is the body,
+// content-length is required (no chunked bodies), the name and page ride in the query and content-type is the declared
+// type. The bytes are reserved under a lease before anything is stored, streamed into R2 through a FixedLengthStream
+// (an early end or extra bytes fail the put, so a short object is never stored), checked by their first bytes as they go
+// by, and the lease is then committed (stored) or released (anything else) exactly once.
+async function uploadStream(request, env, db, url) {
+  const store = env[MEDIA_BINDING];
+  if (!store || typeof store.putStream !== "function") return json({ error: "큰 파일 저장소가 연결되지 않았어요." }, 503);
+  const tooBig = "파일이 너무 커요. 한 파일에 50MB 까지 올릴 수 있어요.";
+  const size = Number(request.headers.get("content-length"));
+  if (!request.body || !Number.isSafeInteger(size) || size <= 0) return json({ error: "파일 크기를 알 수 없어요. 다시 올려 주세요." }, 411);
+  if (size > MEDIA_MAX_BYTES) return json({ error: tooBig }, 413);
+  const declared = baseMime(request.headers.get("content-type"));
+  if (!isAllowedMime(declared) || declared === "image/svg+xml" || declared === "text/plain") return json({ error: "영상, 소리, 이미지, PDF 파일만 올릴 수 있어요." }, 415);
+  const name = sanitizeName(url.searchParams.get("name"));
+  const page = url.searchParams.get("page") ? String(url.searchParams.get("page")).slice(0, 120) : null;
+  const ledger = mediaLedger(env);
+  const id = mediaId();
+  const lease = (env.ACARD_WORKSPACE || "owner") + ":" + id;
+  try { await reserveMedia(env, db, size, lease); }
+  catch (error) { if (error instanceof AgentError) return json({ error: error.message }, error.status); throw error; }
+  let stored = false, committed = false;
+  try {
+    const typeError = new AgentError(declared.startsWith("video/") ? "영상 파일이 아니에요. 원본 영상을 그대로 올려 주세요." : "파일 내용이 형식과 맞지 않아요. 원본 파일을 그대로 올려 주세요.", 415);
+    const { tap, decided } = headTap(16, (bytes) => { const mime = streamMime(declared, bytes); if (!mime) throw typeError; return mime; });
+    const fixed = new FixedLengthStream(size);
+    const piped = request.body.pipeThrough(tap).pipeTo(fixed.writable);
+    const putting = decided.then((mime) => store.putStream("media/" + id, fixed.readable, { name, size, mime }));
+    const [mime, put] = await Promise.all([decided, putting, piped]);
+    if (!put) throw new AgentError("파일을 저장하지 못했어요. 다시 올려 주세요.", 502);
+    stored = true;
+    // Commit first: from here the bytes are counted as stored, so a failed row insert below gives them back once.
+    if (ledger) await ledger.mediaCommit(lease, size);
+    committed = true;
+    const etag = put.httpEtag ? '"r2-' + String(put.httpEtag).replace(/"/g, "") + '"' : null;
+    await db.prepare("INSERT INTO media (id, page, name, mime, bytes, created, etag) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id, page, name, mime, size, Date.now(), etag).run();
+    return json({ ok: true, id, url: "/media/" + id, mime, name, size });
+  } catch (error) {
+    if (stored) await store.delete("media/" + id).catch((cause) => console.error("acard stream upload cleanup failed", id, String(cause)));
+    if (committed) await releaseMedia(env, size);
+    if (error instanceof AgentError) return json({ error: error.message }, error.status);
+    console.error("acard stream upload failed", id, String(error && error.message || error));
+    return json({ error: "올리는 도중 연결이 끊겼어요. 다시 올려 주세요." }, 400);
+  } finally {
+    if (!committed && ledger) await ledger.mediaRelease(lease).catch((cause) => console.error("acard media lease release failed", lease, String(cause)));
+  }
+}
+
 async function storeAgentImage(env, db, page, name, declared, bytes, source) {
   const store = env[MEDIA_BINDING];
   if (!store) throw new AgentError("미디어 저장소가 연결되지 않았어요.", 503);
   if (!bytes || !bytes.byteLength) throw new AgentError("올릴 파일이 없어요.");
-  if (bytes.byteLength > MEDIA_MAX_BYTES) throw new AgentError("파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요.", 413);
+  if (bytes.byteLength > MEDIA_BUFFER_BYTES) throw new AgentError("파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요.", 413);
   let mime = sniffImage(bytes) || (isSvg(bytes) ? "image/svg+xml" : null);
   if (!mime || !AGENT_IMAGE_MIMES.has(mime) || (declared && baseMime(declared) !== mime)) throw new AgentError("png, jpeg, webp, gif, svg 이미지만 올릴 수 있어요.", 415);
   if (mime === "image/svg+xml") bytes = new TextEncoder().encode(ACARD_FEATURES.services.sanitizeSvg(new TextDecoder().decode(bytes))).buffer;
@@ -2565,7 +2740,7 @@ async function storeAgentVideo(env, db, page, name, bytes) {
   const store = env[MEDIA_BINDING];
   if (!store) throw new AgentError("미디어 저장소가 연결되지 않았어요.", 503);
   if (!bytes || !bytes.byteLength) throw new AgentError("올릴 파일이 없어요.");
-  if (bytes.byteLength > MEDIA_MAX_BYTES) throw new AgentError("영상이 너무 커요. 최대 4MB 까지 올릴 수 있어요.", 413);
+  if (bytes.byteLength > MEDIA_BUFFER_BYTES) throw new AgentError("영상이 너무 커요. 최대 4MB 까지 올릴 수 있어요.", 413);
   const b = new Uint8Array(bytes.slice(0, 12));
   const ftyp = b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70;
   const mime = ftyp ? (b[8] === 0x71 && b[9] === 0x74 ? "video/quicktime" : "video/mp4") : b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3 ? "video/webm" : null;
@@ -2614,19 +2789,19 @@ async function uploadLookImage(request, env, db, kind) {
 }
 
 async function mediaUsage(env, db) {
-  const used = await workspaceMediaBytes(db);
-  return json({ used, quota: memberWorkspace(env) ? WORKSPACE_MEDIA_QUOTA : null, fileLimit: LOOK_MAX_BYTES, types: [...LOOK_TYPES] });
+  const [used, plan] = await Promise.all([workspaceMediaBytes(db), memberWorkspace(env) ? mediaPlan(env) : null]);
+  return json({ used, quota: plan ? plan.quota : null, tier: plan ? plan.tier : null, passUntil: plan ? plan.passUntil : null, fileLimit: LOOK_MAX_BYTES, types: [...LOOK_TYPES], uploadLimit: MEDIA_MAX_BYTES, bufferLimit: MEDIA_BUFFER_BYTES });
 }
 
 async function uploadMedia(request, env, db) {
   const store = env[MEDIA_BINDING];
   if (!store) return json({ error: "미디어 저장소가 연결되지 않았어요." }, 503);
   const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MEDIA_MAX_BYTES + 64 * 1024) return json({ error: "파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요." }, 413);
+  if (declared > MEDIA_BUFFER_BYTES + 64 * 1024) return json({ error: "파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요." }, 413);
   const form = await request.formData().catch(() => null);
   const file = form ? form.get("file") : null;
   if (!file || typeof file === "string" || !file.size) return json({ error: "올릴 파일이 없어요." }, 400);
-  if (file.size > MEDIA_MAX_BYTES) return json({ error: "파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요." }, 413);
+  if (file.size > MEDIA_BUFFER_BYTES) return json({ error: "파일이 너무 커요. 최대 4MB 까지 올릴 수 있어요." }, 413);
   let mime = baseMime(file.type);
   if (!isAllowedMime(mime)) return json({ error: "이미지, 영상, 소리, PDF, 텍스트 파일만 올릴 수 있어요." }, 415);
   const id = mediaId();
@@ -2679,11 +2854,63 @@ async function readMedia(env, id, row) {
   return found;
 }
 
+// One `bytes=` range from a Range header against a file of `size` bytes: { offset, length }, "bad" when it cannot be
+// served (416), or null for no/ignored range (several ranges are answered whole, as RFC 9110 allows).
+export function byteRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header || "").trim());
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  if (m[1] === "") {
+    const suffix = Math.min(Number(m[2]), size);
+    return suffix > 0 ? { offset: size - suffix, length: suffix } : "bad";
+  }
+  const start = Number(m[1]), end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  if (start >= size || end < start) return "bad";
+  return { offset: start, length: end - start + 1 };
+}
+
+// R2 originals with a stored ETag are streamed (never read whole) and answer Range requests with 206, so a 50 MB video
+// starts at once and seeks (Safari will not play a video whose server ignores Range). Anything else (KV originals, files
+// whose ETag is not saved yet, resized copies) takes the buffered path below.
+async function streamMedia(env, id, request, row) {
+  const store = env[MEDIA_BINDING];
+  const range = request ? request.headers.get("range") : null;
+  const wantsBody = request?.method !== "HEAD";
+  // No Range: one streamed read. Range or HEAD: the size first (a head call, no bytes), then only the asked part.
+  const head = range || !wantsBody ? await store.r2Head("media/" + id) : await store.r2Object("media/" + id);
+  if (!head) return null;
+  const size = Number(head.size);
+  const asked = byteRange(range, size);
+  const meta = head.meta || {};
+  const mime = row.mime || meta.mime || "application/octet-stream";
+  const headers = {
+    "content-type": mime,
+    "cache-control": "private, no-cache",
+    etag: row.etag,
+    "content-disposition": pickDisposition(mime, row.name || meta.name || id),
+    ...MEDIA_HEADERS,
+    "x-acard-store": "r2",
+    "accept-ranges": "bytes",
+  };
+  if (asked === "bad") return new Response(null, { status: 416, headers: { ...headers, "content-range": "bytes */" + size } });
+  if (!wantsBody) return new Response(null, { status: 200, headers: { ...headers, "content-length": String(size) } });
+  if (!asked) {
+    const whole = head.body ? head : await store.r2Object("media/" + id);
+    return whole && whole.body ? new Response(whole.body, { status: 200, headers: { ...headers, "content-length": String(size) } }) : null;
+  }
+  const part = await store.r2Object("media/" + id, { range: asked });
+  if (!part || !part.body) return null;
+  return new Response(part.body, { status: 206, headers: { ...headers, "content-length": String(asked.length), "content-range": "bytes " + asked.offset + "-" + (asked.offset + asked.length - 1) + "/" + size } });
+}
+
 async function serveMedia(env, id, request) {
   const store = env[MEDIA_BINDING];
   const row = store && MEDIA_ID.test(id) ? await mediaRow(env, id) : null;
   const width = request ? Number(new URL(request.url).searchParams.get("w")) : 0;
   const variantKey = [400, 800, 1600].includes(width) ? "media/" + id + "@w" + width : null;
+  if (row && !row.trashed && row.etag && !variantKey && typeof store.r2Object === "function" && typeof store.r2Head === "function" && !etagMatches(request, row.etag)) {
+    const streamed = await streamMedia(env, id, request, row);
+    if (streamed) return streamed;
+  }
   if (row && !row.trashed && request?.method !== "HEAD") {
     if (!variantKey && etagMatches(request, row.etag)) {
       return new Response(null, { status: 304, headers: { "cache-control": "private, no-cache", etag: row.etag, ...MEDIA_HEADERS } });
@@ -2829,6 +3056,8 @@ function printShell(page, blocks) {
     "hr{border:0;border-top:1px solid #ccc;margin:18px 0}",
     // Evidence labels keep their colors on paper (no tokens on this page): the light success/warning/info tones.
     ".ev{--fs-11:8pt;--radius-pill:999px;--space-2:6px;--color-success-bg:#edf3ec;--color-success-fg:#346538;--color-warning-bg:#fbf3db;--color-warning-fg:#956400;--color-info-bg:#e1f3fe;--color-info-fg:#1f6c9f;-webkit-print-color-adjust:exact;print-color-adjust:exact}",
+    // Footnote numbers (block-html.js FOOTNOTE_CSS) get their small size here too; the page has no tokens.
+    ".fnref{--fs-12:8pt;--accent:#1f6c9f}",
     ".backlinks{margin-top:26px;padding-top:10px;border-top:1px solid #ddd;font-size:9.5pt;color:#666}",
     ".bar{position:sticky;top:0;display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:8px 12px;background:#fff;border-bottom:1px solid #eee}",
     ".bar a,.bar button{font:inherit;font-size:10pt;color:#333;background:#f4f4f4;border:1px solid #ddd;border-radius:999px;padding:5px 12px;cursor:pointer;text-decoration:none}",
@@ -2986,7 +3215,8 @@ export default {
       await ensureSchema(db);
       const found = await readPage(db, slug);
       if (!found) return new Response("없는 페이지예요.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
-      return new Response(printShell(found.page, found.blocks), {
+      const blocks = materializeSyncedBlocks(found.blocks, await resolveSyncedBlocks(db, slug, found.blocks, syncedReadOptions(db, env, true)));
+      return new Response(printShell(found.page, blocks), {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" },
       });
     }
@@ -3040,7 +3270,7 @@ export default {
         };
         let [row, appearance, blockRows] = await pageRead();
         // The member home is only re-made (a round trip plus quota-counted writes) when it is missing or in the trash.
-        if (isMember(env) && slug === "index" && (!row || appearance.trashed)) { await ensureMemberHome(db); [row, appearance, blockRows] = await pageRead(); }
+        if (isMember(env) && slug === "index" && (!row || appearance.trashed)) { await ensureMemberHome(db, env); [row, appearance, blockRows] = await pageRead(); }
         stage("metadata");
         if (appearance.trashed) return readerResponse(new Response(missingPageHtml(slug, true), { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } }));
         const liveDatabase = row && slug === "board" && row.kind === "db" && await db.prepare("SELECT id FROM databases WHERE slug = ?").bind(slug).first();
@@ -3048,6 +3278,7 @@ export default {
           const found = await readPage(db, slug, { page: row, meta: appearance, rows: blockRows });
           stage("blocks");
           if (found) {
+            found.blocks = materializeSyncedBlocks(found.blocks, await resolveSyncedBlocks(db, slug, found.blocks, syncedReadOptions(db, env)), true);
             if (isMember(env)) found.page.ws = "member";
             if (isGuest(env)) Object.assign(found.page, { ws: "guest", guest: env.ACARD_GUEST_EMAIL, guestWs: env.ACARD_WORKSPACE && env.ACARD_WORKSPACE !== "owner" ? env.ACARD_WORKSPACE : "o", readOnly: !canWriteSlug(db, slug) });
             const [extras, agent, tree, folderHtml] = await Promise.all([
@@ -3101,8 +3332,8 @@ function missingPageHtml(slug, trashed) {
 
 const AGENT_API = "/api/v1";
 const HOME_TAG = '<link rel="stylesheet" href="/lazy/ui-kit-css.css?v=__UI_KIT_CSS__"><link rel="stylesheet" href="/lazy/ui-home-css.css?v=__HOME_CSS__"><script src="/lazy/ui-home-js.js?v=__HOME_JS__" defer></script>';
-// Before first paint (#35): keeps the
-// server tree rows hidden until lazy/folders.js marks .side-ws as fd-host and swaps in its tree (3 s fallback), so no menu row ever moves.
+// Before first paint (#35): keeps the server tree rows hidden until lazy/folders.js marks .side-ws as fd-host and swaps in
+// its tree (3 s fallback), so no menu row ever moves.
 const PJ_SIDE_PH = '<style>.fd-wait .side-ws:not(.fd-host)>*{visibility:hidden}</style><script>var R=document.documentElement;R.classList.add("fd-wait");setTimeout(function(){R.classList.remove("fd-wait")},3e3)</script>';
 const LIVE_TAG = '<script src="/lazy/live.js?v=__LIVE_JS__" defer></script>';
 const FOLDERS_TAG = '<link rel="stylesheet" href="/lazy/folders.css?v=__FOLDERS_CSS__"><script src="/lazy/folders.js?v=__FOLDERS_JS__" defer></script>' + LIVE_TAG;
@@ -3346,7 +3577,7 @@ function buttonSaverStatement(db, key, guard) {
 // 페이지 내용을 통째로 되돌리는 경로(기록 복원·템플릿 적용): 동작이 있는 버튼 블록마다 되돌린 사람을 저장한 사람으로 적는다.
 // 손님이 되돌리면 바뀐 동작 목록은 그 손님이 저장한 것이다. 소유자가 되돌리거나 복제하면 원래 블록(source 페이지의 같은 id)의 손님
 // 기록을 그대로 잇는다(소유자가 되돌렸다고 손님 동작이 소유자 권한을 얻지 않는다). blocks/current 는 blocks 표 줄(meta 는 JSON 문자열일 수 있다).
-async function buttonSavers(db, slug, blocks, current, source = slug) {
+async function buttonSavers(db, slug, blocks, current, source = slug, guard) {
   const actionsOf = (block) => {
     const meta = block && block.type === "button" ? (typeof block.meta === "string" ? parseJson(block.meta, null) : block.meta) : null;
     return meta && Array.isArray(meta.actions) && meta.actions.length ? JSON.stringify(meta.actions) : null;
@@ -3357,14 +3588,14 @@ async function buttonSavers(db, slug, blocks, current, source = slug) {
     if (!actionsOf(block)) continue;
     const key = blockButtonKey(slug, String(block.id));
     if (db.acardRoles) {
-      if (actionsOf(block) !== before.get(String(block.id))) out.push(buttonSaverStatement(db, key));
+      if (actionsOf(block) !== before.get(String(block.id))) out.push(buttonSaverStatement(db, key, guard));
       continue;
     }
     if (source === slug) continue;
     const saver = await db.prepare("SELECT kind, session, email, roles, saved FROM db_button_savers WHERE button = ?").bind(blockButtonKey(source, String(block.id))).first();
     if (saver && saver.kind === "guest") {
-      out.push(db.prepare("INSERT INTO db_button_savers (button, kind, session, email, roles, saved) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (button) DO UPDATE SET kind = excluded.kind, session = excluded.session, email = excluded.email, roles = excluded.roles, saved = excluded.saved")
-        .bind(key, saver.kind, saver.session, saver.email, saver.roles, saver.saved));
+      out.push(db.prepare("INSERT INTO db_button_savers (button, kind, session, email, roles, saved) SELECT CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS BIGINT) WHERE " + (guard ? guard.sql : "1 = 1") + " ON CONFLICT (button) DO UPDATE SET kind = excluded.kind, session = excluded.session, email = excluded.email, roles = excluded.roles, saved = excluded.saved")
+        .bind(key, saver.kind, saver.session, saver.email, saver.roles, saver.saved, ...(guard ? guard.binds : [])));
     }
   }
   return out;
@@ -3687,11 +3918,19 @@ export const acardHost = {
   },
   // Admin console test of the storage mail (gate/admin.ts POST /storage-alert-test): the real mail with "[테스트]" in the
   // subject and today's usage from the global ledger, sent once to OWNER_ALERT_EMAIL. The ledger and its alert flags are
-  // only read, so the real 8 GB / 9.5 GB mails still go out when those are reached.
+  // only read, so the real step mails (GLOBAL_MEDIA_ALERTS) and the stop mail still go out when those are reached.
   async storageAlertTest(env) {
     const ledger = mediaLedger(env);
     const used = ledger && typeof ledger.mediaUsage === "function" ? Number((await ledger.mediaUsage(0, Infinity)).used) || 0 : 0;
     return { used, to: env.OWNER_ALERT_EMAIL || null, ...(await mailOwnerAboutStorage(env, used, false, true)) };
+  },
+  // Admin console 저장 공간 tab: the global ledger read without changing it, with the cap and the alert steps.
+  async storageUsage(env) {
+    const ledger = mediaLedger(env);
+    const row = ledger && typeof ledger.mediaUsage === "function" ? await ledger.mediaUsage(0, Infinity) : { used: 0, alerted: 0 };
+    // Uploads still streaming (or left by a closed tab until the sweep): their bytes are already inside `used`.
+    const leases = ledger && typeof ledger.mediaSweep === "function" ? await ledger.mediaSweep().catch(() => null) : null;
+    return { used: Number(row.used) || 0, alerted: Number(row.alerted) || 0, cap: GLOBAL_MEDIA_CAP, alerts: GLOBAL_MEDIA_ALERTS, uploading: leases ? { count: leases.open, bytes: leases.openBytes } : null };
   },
   challenge: (message, next, status) => challenge(message, next, status),
   escapeHtml: (text) => escapeHtml(text),
@@ -3780,7 +4019,7 @@ async function handleApi(request, env, db, url, dispatchFeatures = true) {
     return json({ ok: true, deleted });
   }
   let cleanup;
-  const lifecycle = await handleEditorApi(request, db, url, { json, readPage, saveBlocks, normaliseBlocks, slugify, buttonSavers,
+  const lifecycle = await handleEditorApi(request, db, url, { json, readPage, saveBlocks, normaliseBlocks, slugify, buttonSavers, guardSyncedWrite,
     permanentDeletePlan: async (db, slug) => (cleanup = await permanentDeletePlan(db, slug)) });
   if (lifecycle && permanent && lifecycle.ok && env[MEDIA_BINDING]) {
     for (const row of cleanup.media) await env[MEDIA_BINDING].delete("media/" + row.id).then(() => releaseMedia(env, Number(row.bytes))).catch(() => {});
@@ -3797,6 +4036,7 @@ async function handleApi(request, env, db, url, dispatchFeatures = true) {
   if (path === "/upload" && method === "POST") {
     const kind = url.searchParams.get("kind");
     if (kind === "icon" || kind === "cover") return await uploadLookImage(request, env, db, kind);
+    if (url.searchParams.get("stream") === "1") return await uploadStream(request, env, db, url);
     return await uploadMedia(request, env, db);
   }
 
@@ -3969,6 +4209,7 @@ async function handleApi(request, env, db, url, dispatchFeatures = true) {
       if (body.base_updated !== undefined && existing.updated !== body.base_updated) return conflict();
       const now = Math.max(Date.now(), existing.updated + 1);
       const [stored, agentPage] = await Promise.all([readPage(db, slug), humanAgentPage(db, slug)]);
+      guardSyncedWrite(body.blocks, slug, stored?.blocks ?? []);
       const buttons = new Set();
       const blocks = await guardButtonBlocks(db, stored ? stored.blocks : [], humanMarkSaves(stored ? stored.blocks : [], normaliseBlocks(pageStructure(body.blocks.slice(0, 2000))), now, agentPage), buttons);
       const title = typeof body.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : null;

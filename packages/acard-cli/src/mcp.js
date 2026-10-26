@@ -44,6 +44,9 @@ export async function runMcpProxy(cfg, version) {
     server.onclose = resolve;
   });
   await server.connect(local);
+  // MCP stdio shutdown: the client closes our stdin and waits for us to exit. StdioServerTransport does not watch for
+  // the end of stdin, so without this the client waits out its 2 s grace period and then kills the proxy (#146).
+  process.stdin.once("end", () => server.close());
   await closed;
   await client.close().catch((err) => log(`close failed: ${err.message}`));
   return 0;

@@ -11,6 +11,7 @@ function wired(transport: (slug: string, payload: any) => Promise<Response> = as
   const timers = new Map<number, () => void>();
   let timerId = 0, clock = 1_000_000, writes = 0;
   const editor: any = {
+    writerId: "coalesce",
     slug: "one", state: { title: "Queue", blocks: [{ id: "b1", type: "paragraph", text: "" }], saving: false, dirty: false, baseUpdated: 10 },
     transport,
     setSave: (text: string) => { status.textContent = text; },
@@ -19,15 +20,15 @@ function wired(transport: (slug: string, payload: any) => Promise<Response> = as
   };
   const values = new Map<string, string>();
   const localStorage = { get length() { return values.size; }, key: (i: number) => [...values.keys()][i], getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => { writes++; values.set(k, v); } };
-  const window: any = { AcardEditor: editor, localStorage, indexedDB: undefined, addEventListener: (name: string, fn: any) => { (listeners["window:" + name] ||= []).push(fn); } };
-  const context: any = { window, Promise, Map, Date: { now: () => clock }, JSON, Math, Response, Object, Array, Number,
-    navigator: { onLine: true }, document: { querySelector: () => ({ content: "member-a" }), getElementById: () => status, addEventListener: (name: string, fn: any) => { (listeners["document:" + name] ||= []).push(fn); } },
+  const window: any = { AcardEditor: editor, localStorage, indexedDB: undefined, addEventListener: (name: string, fn: any) => { (listeners["window:" + name] ||= []).push(fn); }, dispatchEvent: (event: Event) => { (listeners["window:" + event.type] || []).forEach(fn => fn(event)); } };
+  const context: any = { window, Promise, Map, Date: { now: () => clock }, JSON, Math, Response, Object, Array, Number, CustomEvent,
+    navigator: { onLine: true }, document: { cookie: "acard_id=member-a", querySelector: () => ({ content: "member-a" }), getElementById: () => status, addEventListener: (name: string, fn: any) => { (listeners["document:" + name] ||= []).push(fn); } },
     MutationObserver: class { observe() {} },
     setTimeout: (fn: () => void) => { timers.set(++timerId, fn); return timerId; }, clearTimeout: (id: number) => { timers.delete(id); } };
   runInNewContext(source.replace("(typeof window === \"undefined\" ? globalThis : window)", "(window)"), context);
   const emit = (name: string, value?: any) => Promise.all((listeners[name] || []).map((fn) => fn(value)));
   const type = (text: string) => { editor.state.blocks[0].text = text; editor.state.dirty = true; return emit("change", { title: editor.state.title, blocks: editor.state.blocks, base_updated: 10 }); };
-  const journal = () => JSON.parse(values.get("acard-save-queue:member-a:one")!).payload.blocks[0].text;
+  const journal = () => JSON.parse(values.get('acard-save-queue:member-a:writer:["coalesce","one",""]')!).payload.blocks[0].text;
   // Runs every timer that is due at the current clock (the queue's flush timer and the change timer).
   const runDue = () => { const due = [...timers.values()]; timers.clear(); due.forEach((fn) => fn()); };
   return { editor, emit, type, journal, runDue, writes: () => writes, advance: (ms: number) => { clock += ms; } };

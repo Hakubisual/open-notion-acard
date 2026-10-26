@@ -126,8 +126,10 @@ export async function readZip(bytes: Uint8Array, limits = ARCHIVE_LIMITS): Promi
     const start = offset + 30 + view.getUint16(offset + 26, true) + view.getUint16(offset + 28, true);
     const raw = bytes.subarray(start, start + csize);
     if (raw.length !== csize) throw new ArchiveError("zip 항목이 잘렸어요: " + name);
-    const data = method === 0 ? raw : method === 8 ? await pipe(raw, new DecompressionStream("deflate-raw")) : null;
-    if (!data) throw new ArchiveError("지원하지 않는 압축 방식이에요: " + name);
+    if (method !== 0 && method !== 8) throw new ArchiveError("지원하지 않는 압축 방식이에요: " + name);
+    let data: Uint8Array;
+    try { data = method === 0 ? raw : await pipe(raw, new DecompressionStream("deflate-raw")); }
+    catch { throw new ArchiveError("zip 항목이 손상됐어요: " + name); }
     if (data.length !== usize || crc32(data) !== crc) throw new ArchiveError("zip 항목이 손상됐어요: " + name);
     out.set(name, data);
   }

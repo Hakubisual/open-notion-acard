@@ -9,7 +9,6 @@
 .reader .reader-toc li { margin: 0; padding: 0; }
 .reader .reader-toc li a { display: flex; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 8px; color: var(--fg); text-decoration: none; line-height: 1.4; }
 .reader .reader-toc li a:hover { background: var(--accent-soft); color: var(--accent-strong); }
-.reader .reader-toc .n { flex: 0 0 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: var(--bg-soft); color: var(--fg-dim); font-size: var(--fs-12); }
 .reader .reader-toc-label { min-width: 0; overflow-wrap: anywhere; }
 .reader .reader-toc .l3 a { padding-left: 20px; }
 .reader .reader-toc .l4 a { padding-left: 32px; }

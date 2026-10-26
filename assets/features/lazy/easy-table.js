@@ -5,6 +5,8 @@
   "use strict";
   var editor = window.AcardEditor;
   if (!editor) return;
+  // issue 147: default column names are data, named in the UI language they are made in.
+  function colName(n) { return window.AcardLang ? AcardLang.text("열" + n) : "열" + n; }
 
   // Parse clipboard text from Excel / Google Sheets (TSV) or CSV into a 2D array. Returns null for single cells.
   function parseGrid(text) {
@@ -49,7 +51,7 @@
   function mount(host, block, save) {
     var doc = host.ownerDocument;
     var meta = block.meta || (block.meta = {});
-    if (!Array.isArray(meta.columns) || !meta.columns.length) meta.columns = ["열1", "열2"];
+    if (!Array.isArray(meta.columns) || !meta.columns.length) meta.columns = [colName(1), colName(2)];
     if (!Array.isArray(meta.rows)) meta.rows = [];
     if (meta.header === undefined) meta.header = true;
     var menu = null;
@@ -114,7 +116,7 @@
       commit(true);
     }
     function addCol(at) {
-      cols().splice(at, 0, "열" + (cols().length + 1));
+      cols().splice(at, 0, colName(cols().length + 1));
       meta.rows.forEach(function (r) { r.splice(at, 0, ""); });
       if (Array.isArray(meta.widths)) meta.widths.splice(at, 0, 0);
       pendingFocus[block.id] = [-1, at];
@@ -136,14 +138,14 @@
       // Paste into an empty/new table replaces the header too; otherwise it fills cells from the focused one.
       var empty = meta.rows.every(function (row) { return row.every(function (v) { return !v; }); });
       if (empty && r <= 0 && c === 0) {
-        meta.columns = grid[0].map(function (v, i) { return v || "열" + (i + 1); });
+        meta.columns = grid[0].map(function (v, i) { return v || colName(i + 1); });
         meta.rows = grid.slice(1);
       } else {
         var start = r < 0 ? 0 : r;
         grid.forEach(function (line, i) {
           while (meta.rows.length <= start + i) meta.rows.push(cols().map(function () { return ""; }));
           line.forEach(function (v, j) {
-            while (cols().length <= c + j) { cols().push("열" + (cols().length + 1)); meta.rows.forEach(function (x) { x.push(""); }); }
+            while (cols().length <= c + j) { cols().push(colName(cols().length + 1)); meta.rows.forEach(function (x) { x.push(""); }); }
             meta.rows[start + i][c + j] = v;
           });
         });
@@ -173,7 +175,7 @@
       el.textContent = value;
       el.setAttribute("aria-label", r < 0 ? (c + 1) + "번째 열 이름" : (r + 1) + "행 " + (c + 1) + "열");
       el.addEventListener("input", function () {
-        if (r < 0) cols()[c] = el.textContent.trim() || "열" + (c + 1);
+        if (r < 0) cols()[c] = el.textContent.trim() || colName(c + 1);
         else meta.rows[r][c] = el.textContent;
         commit(false);
       });

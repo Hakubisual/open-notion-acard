@@ -6,7 +6,9 @@ const bldProps = { title: { type: "string" }, subtitle: { type: "string" }, capt
 function bldRows(value, h, max = 120) { return h.list(value, max).filter((row) => row && typeof row === "object" && !Array.isArray(row)); }
 function bldFrame(d, h, label, body) {
   const title = h.str(d.title, label, 120), subtitle = h.str(d.subtitle, "", 240), caption = h.str(d.caption, "", 400);
-  return '<figure class="bld-frame" role="group" aria-label="' + h.esc(title) + '"><header class="bld-head"><div class="bld-title">' + h.esc(title) + '</div>' + (subtitle ? '<div class="bld-sub">' + h.esc(subtitle) + '</div>' : '') + '</header>' + body + (caption ? '<figcaption class="bld-caption">' + h.esc(caption) + '</figcaption>' : '') + '</figure>';
+  // A heading right above with the same words (## 참고문헌 + this block) already titles the block: its own title stays off.
+  const shown = h.titleShown(title);
+  return '<figure class="bld-frame" role="group" aria-label="' + h.esc(title) + '">' + (shown || subtitle ? '<header class="bld-head">' + (shown ? '<div class="bld-title">' + h.esc(title) + '</div>' : '') + (subtitle ? '<div class="bld-sub">' + h.esc(subtitle) + '</div>' : '') + '</header>' : '') + body + (caption ? '<figcaption class="bld-caption">' + h.esc(caption) + '</figcaption>' : '') + '</figure>';
 }
 function bldEmpty(h) { return '<p class="bld-empty">' + h.esc("내용을 넣으면 여기에 표시돼요.") + '</p>'; }
 function bldUrl(value, h) {
@@ -93,9 +95,9 @@ registerComponent({
   css: bldCss("block-references") + '.ui-block-references .bld-refs{display:grid;gap:var(--space-3);margin:0;padding:0;list-style:none;font-size:var(--fs-13);line-height:1.65}.ui-block-references .bld-ref{padding-left:var(--space-5);text-indent:calc(-1 * var(--space-5))}.ui-block-references .bld-refs.is-ieee{counter-reset:bld-ref}.ui-block-references .is-ieee .bld-ref{counter-increment:bld-ref;padding-left:2.5em;text-indent:-2.5em}.ui-block-references .is-ieee .bld-ref::before{content:"[" counter(bld-ref) "] ";display:inline-block;width:2.5em;text-indent:0;color:var(--color-text-dim)}.ui-block-references .bld-ref a{color:var(--color-accent-strong);text-decoration:underline;text-underline-offset:.2em}.ui-block-references .bld-ref a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}',
   render(d, h) {
     const refs = bldRows(d.references, h).filter((row) => h.str(row.title, "", 600) || h.str(row.authors, "", 400));
-    if (!refs.length) return bldFrame(d, h, "참고문헌", bldEmpty(h));
+    if (!refs.length) return bldFrame(d, h, h.t("참고문헌", "References"), bldEmpty(h));
     const style = h.oneOf(d.style, ['apa', 'ieee'], 'apa'), tag = style === 'ieee' ? 'ol' : 'ul';
-    return bldFrame(d, h, "참고문헌", '<' + tag + ' class="bld-refs is-' + style + '">' + refs.map((row) => {
+    return bldFrame(d, h, h.t("참고문헌", "References"), '<' + tag + ' class="bld-refs is-' + style + '">' + refs.map((row) => {
       const authors = h.str(row.authors, "저자 미상", 400), year = h.str(row.year, "연도 미상", 40), title = h.str(row.title, "제목 없음", 600), venue = h.str(row.venue, "", 600), url = bldUrl(row.url, h);
       const text = style === 'apa' ? h.esc(authors) + ' (' + h.esc(year) + '). <cite>' + h.esc(title) + '</cite>.' + (venue ? ' ' + h.esc(venue) + '.' : '') : h.esc(authors) + ', “' + h.esc(title) + ',”' + (venue ? ' <cite>' + h.esc(venue) + '</cite>,' : '') + ' ' + h.esc(year) + '.';
       return '<li class="bld-ref">' + text + (url ? ' <a href="' + h.esc(url) + '">' + h.esc(url) + '</a>' : '') + '</li>';
@@ -129,10 +131,10 @@ registerComponent({
   slash: { label: "코드 블록", hint: "파일명과 줄 번호가 있는 코드", ico: "⌘", aliases: "코드 소스 파일 code source snippet" },
   css: bldCss("block-code") + '.ui-block-code .bld-codebox{min-width:0;overflow:hidden;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface-soft)}.ui-block-code .bld-codehead{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-raised);font-size:var(--fs-12)}.ui-block-code .bld-file{flex:1;min-width:0;font-weight:600}.ui-block-code .bld-lang{color:var(--color-text-dim)}.ui-block-code .bld-copy{padding:var(--space-1) var(--space-2);border:1px solid var(--color-border);border-radius:var(--radius-xs);color:var(--color-text-dim)}.ui-block-code .bld-code-scroll{margin:0;padding:var(--space-3) 0;max-width:100%;overflow-x:auto;white-space:pre;font-family:var(--font-mono);font-size:var(--fs-12);line-height:1.75;tab-size:4;background:none;color:var(--color-text)}.ui-block-code .bld-code-scroll:focus-visible{outline:2px solid var(--color-accent);outline-offset:-2px}.ui-block-code .bld-source{display:block;min-width:100%;width:max-content;counter-reset:bld-line;background:none;padding:0;font:inherit;color:inherit}.ui-block-code .bld-line{display:block;min-height:1.75em;padding-right:var(--space-4);counter-increment:bld-line}.ui-block-code .bld-line::before{content:counter(bld-line);display:inline-block;width:3.5em;padding-right:1em;text-align:right;color:var(--color-text-dim);user-select:none}.ui-block-code .bld-line.is-highlight{background:var(--color-accent-soft)}@media print{.ui-block-code .bld-code-scroll{overflow:visible;white-space:pre-wrap}.ui-block-code .bld-source{width:auto}.ui-block-code .bld-line{overflow-wrap:anywhere}.ui-block-code .bld-copy{display:none}}',
   render(d, h) {
-    const code = h.str(d.code, "", 100000), filename = h.str(d.filename, "코드", 160), language = h.str(d.language, "", 40);
-    if (!code) return bldFrame(d, h, "코드 블록", bldEmpty(h));
+    const code = h.str(d.code, "", 100000), filename = h.str(d.filename, h.t("코드", "Code"), 160), language = h.str(d.language, "", 40);
+    if (!code) return bldFrame(d, h, h.t("코드 블록", "Code"), bldEmpty(h));
     const highlighted = new Set(h.list(d.highlight, 10000).filter((n) => Number.isInteger(n) && n > 0));
     const lines = code.replace(/\r\n?/g, '\n').split('\n');
-    return bldFrame(d, h, "코드 블록", '<div class="bld-codebox"><div class="bld-codehead"><span class="bld-file">' + h.esc(filename) + '</span><span class="bld-lang">' + h.esc(language) + '</span><span class="bld-copy" aria-hidden="true">⧉ 복사</span></div><pre class="bld-code-scroll" tabindex="0" role="region" aria-label="' + h.esc(filename + ' 코드') + '"><code class="bld-source">' + lines.map((line, i) => '<span class="bld-line' + (highlighted.has(i + 1) ? ' is-highlight' : '') + '">' + h.esc(line) + '</span>').join('') + '</code></pre></div>');
+    return bldFrame(d, h, h.t("코드 블록", "Code"), '<div class="bld-codebox"><div class="bld-codehead"><span class="bld-file">' + h.esc(filename) + '</span><span class="bld-lang">' + h.esc(language) + '</span><span class="bld-copy" aria-hidden="true">⧉ ' + h.t('복사', 'Copy') + '</span></div><pre class="bld-code-scroll" tabindex="0" role="region" aria-label="' + h.esc(filename + ' 코드') + '"><code class="bld-source">' + lines.map((line, i) => '<span class="bld-line' + (highlighted.has(i + 1) ? ' is-highlight' : '') + '">' + h.esc(line) + '</span>').join('') + '</code></pre></div>');
   },
 });

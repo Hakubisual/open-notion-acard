@@ -22,7 +22,7 @@
   "assets/features/lazy/reader-tools.css": 4,
   "assets/features/lazy/scrollbars.js": 1,
   "assets/features/lazy/share-dialog.js": 20,
-  "assets/features/lazy/toc.css": 4,
+  "assets/features/lazy/toc.css": 3,
   "assets/features/lazy/visuals.css": 8,
   "assets/features/lazy/visuals.js": 4,
   "assets/features/page-width.css": 1,
@@ -36,7 +36,7 @@
   "editor-next/visuals-editor.css": 8,
   "editor-next/visuals-editor.js": 1,
   "features/page-view.js": 6,
-  "features/share.js": 11,
+  "features/share.js": 10,
   "visual-html.js": 3
  },
  "shadow": {

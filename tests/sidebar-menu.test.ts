@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../assets/editor.js", import.meta.url), "utf8");
 const start = source.indexOf("  function renderTree(");
 const end = source.indexOf("  function loadBacklinks(", start);
-const menuSource = source.slice(start, end);
+const lazySource = readFileSync(new URL("../assets/features/lazy/editor-page-menu.js", import.meta.url), "utf8");
+const menuFunctions = lazySource.slice(lazySource.indexOf("  function pageMenu("), lazySource.lastIndexOf("    pageMenu(anchor, page);"));
+const menuSource = source.slice(start, source.indexOf("  function pageMenu(", start)) + menuFunctions;
 
 function setup() {
   let focused: Node | null = null;
@@ -66,7 +68,8 @@ function setup() {
     constructor(text: string, value: string) { super("option"); this.textContent = text; this.value = value; }
   }
   const run = new Function("els", "document", "window", "state", "slug", "api", "loadTree", "setSave", "location", "Option", menuSource + "return { pageMenu, renameInline, pickParent };");
-  const actions = run({ ctx, tree, title }, { createElement: (tag: string) => new Node(tag) }, { innerWidth: 1000, innerHeight: 800, confirm: () => true }, state, "page", api, loadTree, setSave, { href: "" }, Option);
+  const location = { href: "" };
+  const actions = run({ ctx, tree, title }, { createElement: (tag: string) => new Node(tag) }, { innerWidth: 1000, innerHeight: 800, confirm: () => true }, state, "page", api, loadTree, setSave, location, Option);
   const fire = (node: Node, type: string, key?: string) => {
     const event = new Event(type, { cancelable: true });
     if (key) Object.defineProperty(event, "key", { value: key });
@@ -79,7 +82,7 @@ function setup() {
     timeout.addEventListener("abort", aborted, { once: true });
     events.addEventListener(name, () => { timeout.removeEventListener("abort", aborted); resolve(); }, { once: true });
   });
-  return { actions, page, ctx, tree, link, anchor, title, state, requests, errors, fire, signal, focus: () => focused, loads: () => loads };
+  return { actions, page, ctx, tree, link, anchor, title, state, requests, errors, fire, signal, location, focus: () => focused, loads: () => loads };
 }
 
 test("sidebar menu focuses its first button and Escape returns to the trigger", () => {
@@ -152,6 +155,20 @@ for (const [index, method, path] of [[3, "POST", "/page/page/move"], [4, "DELETE
     f.requests[0].reject(new Error("request failed"));
     await reported;
     expect(f.errors).toEqual([{ message: "request failed", on: true }]);
+  });
+}
+
+// #162: deleting the open page went to "/", the public landing. It goes to the parent page, or the app home at the top level.
+for (const [parent, want] of [["parent", "/edit/parent/"], [null, "/home/"]] as const) {
+  test("deleting the open page from the sidebar lands on " + want, async () => {
+    const f = setup();
+    f.actions.pageMenu(f.anchor, f.page);
+    (f.page as any).parent = parent;
+    f.fire(f.ctx.children[4], "click");
+    expect(f.requests[0]).toMatchObject({ path: "/page/page", options: { method: "DELETE" } });
+    f.requests[0].resolve({});
+    await Promise.resolve(); await Promise.resolve();
+    expect(f.location.href).toBe(want);
   });
 }
 

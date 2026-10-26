@@ -2,7 +2,8 @@ import {
   ACCESS_COOKIE, OWNER_WS, clearSessionCookies, readCookies, readSession, sessionCookies, setCookie,
   wipeWorkspace, workspaceIdFor, oauthUserId, type Session, type TenancyEnv,
 } from "./tenancy";
-import { isLang, langCookie } from "./i18n";
+import { isLang, langCookie, pickLang, t } from "./i18n";
+import { hasConsent, hasSignupConsent, recordConsent } from "./consent";
 
 export type AccountEnv = TenancyEnv & {
   readonly OUTBOX?: { get(key: string): Promise<string | null>; put(key: string, value: string, options?: unknown): Promise<void>; delete?(key: string): Promise<void>; list(options: { prefix: string }): Promise<{ keys: { name: string }[] }> };
@@ -15,11 +16,37 @@ export type AccountEnv = TenancyEnv & {
   readonly SITE_URL?: string;
   readonly GOOGLE_CLIENT_ID?: string;
   readonly GOOGLE_CLIENT_SECRET?: string;
+  readonly BETA_MODE?: string;
+  readonly WEB_SIGNUP_ALLOW?: string;
 };
+
+// #164 internal web (BETA_MODE=internal): no new web accounts by Google (email sign-up is closed in every mode, #173).
+// Existing accounts still log in. WEB_SIGNUP_ALLOW (comma-separated emails, a server setting) lets a new team member
+// sign up with Google anyway.
+const noNewAccounts = (env: AccountEnv, email: string) =>
+  env.BETA_MODE === "internal" && !(env.WEB_SIGNUP_ALLOW ?? "").toLowerCase().split(/[\s,]+/).includes(email.toLowerCase());
+
+// Whether an auth account with exactly this email exists (service role). null when the lookup itself fails.
+async function accountExists(env: AccountEnv, email: string): Promise<boolean | null> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const r = await gotrue(env, `/admin/users?per_page=50&filter=${encodeURIComponent(email)}`, { admin: true }).catch(() => null);
+  if (!r?.ok || !Array.isArray(r.data?.users)) return null;
+  return r.data.users.some((u: { email?: string }) => String(u.email ?? "").toLowerCase() === email);
+}
+
+function idTokenEmail(idToken: string): string {
+  try {
+    const payload = JSON.parse(atob(idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload?.email_verified === false ? "" : String(payload?.email ?? "").trim().toLowerCase();
+  } catch { return ""; }
+}
 
 const VERIFIER = "acard_pkce";
 const NEXT = "acard_next";
 const GAUTH = "acard_gauth";
+const DESKTOP = "acard_dsk";
+const DESKTOP_HANDOFF = "/api/auth/desktop/handoff";
+const DESKTOP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 // A backslash or control character turns "/\evil.test" into "//evil.test" in browsers.
 const safeNext = (value: string | null | undefined) => (value && value.startsWith("/") && !value.startsWith("//") && !/[\\\u0000-\u001f\u007f]/.test(value) ? value : "/");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -27,7 +54,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // local app opened, so a local-edition user without an invite code finishes connecting. Anything else goes home.
 export const signupNext = (value: unknown): string | null => {
   const next = typeof value === "string" ? value : "";
-  if (next === "/beta") return next;
+  if (next === "/beta" || next === DESKTOP_HANDOFF || next === "/desktop/start") return next;
   if (next.length <= 2000 && /^\/oauth\/authorize\?[^#\s\\]*$/.test(next)) return next;
   return null;
 };
@@ -100,7 +127,7 @@ export async function loadProfile(env: AccountEnv, session: Session): Promise<Pr
 }
 
 // notes.example.com/<word> paths the site itself answers (gate/_worker.js, gate/agent-entry.ts) can never be someone's address.
-const APP_WORDS = new Set(["home", "edit", "print", "import", "guide", "gallery", "compare", "connect", "agents", "oauth", "mcp", "sse", "releases", "reset", "forgot", "index"]);
+const APP_WORDS = new Set(["home", "edit", "print", "import", "guide", "gallery", "compare", "connect", "agents", "oauth", "mcp", "sse", "releases", "desktop", "reset", "forgot", "index"]);
 
 async function handleStatus(env: AccountEnv, token: string, h: string): Promise<string> {
   if (APP_WORDS.has(h.trim().toLowerCase())) return "reserved";
@@ -126,7 +153,11 @@ const googleAvatar = (meta: Record<string, unknown> | undefined): string | null 
 
 const gotrueCode = (d: any): string => String(d?.error_code ?? d?.code ?? d?.error ?? "unknown");
 
-async function readCreds(request: Request): Promise<{ email: string; password: string; next: string } | Response> {
+// #173 (owner 2026-10-25 "일반 메일 가입 없애는"): no new account by email and password, in any BETA_MODE. New accounts come
+// only through Google (and the admin API); existing email accounts still log in and reset their password.
+const EMAIL_SIGNUP_CLOSED = "이메일과 비밀번호로는 새 계정을 만들 수 없어요.";
+
+async function readCreds(request: Request): Promise<{ email: string; password: string } | Response> {
   let body: any;
   try { body = await request.json(); } catch { return err(400, "bad_json", "요청 형식이 올바르지 않아요."); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return err(400, "bad_json", "요청 형식이 올바르지 않아요.");
@@ -134,7 +165,7 @@ async function readCreds(request: Request): Promise<{ email: string; password: s
   const password = String(body?.password ?? "");
   if (!EMAIL_RE.test(email) || email.length > 254) return err(400, "bad_email", "이메일 주소를 확인해 주세요.");
   if (password.length < 8 || password.length > 128) return err(400, "weak_password", "비밀번호는 8자 이상이어야 해요.");
-  return { email, password, next: signupNext(body?.next) ?? "/" };
+  return { email, password };
 }
 
 const b64url = (buf: ArrayBuffer | Uint8Array) =>
@@ -183,23 +214,96 @@ async function verifyHook(request: Request, body: string, secret: string): Promi
   return sigs.split(" ").some((s) => s.split(",")[1] === expected);
 }
 
-async function limited(request: Request, env: AccountEnv, bucket: string): Promise<Response | null> {
+async function limited(request: Request, env: AccountEnv, bucket: string, limit = 10): Promise<Response | null> {
   if (!env.WORKSPACE) return null;
   const ip = request.headers.get("cf-connecting-ip") ?? "local";
   const limiter = env.WORKSPACE.get(env.WORKSPACE.idFromName("rate-limit"));
-  const ok = await limiter.hit(`${bucket}:${ip}`, 10, 60);
+  const ok = await limiter.hit(`${bucket}:${ip}`, limit, 60);
   return ok ? null : err(429, "rate_limited", "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.");
+}
+
+// The address a per-IP limit counts: an IPv4 address as is, an IPv6 address by its /64 network (one home or office line
+// usually gets a whole /64, so counting single v6 addresses would let one line make unlimited accounts).
+export function ipBucket(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [head, tail = ""] = ip.toLowerCase().split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const full = ip.includes("::") ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right] : left;
+  return full.slice(0, 4).map((part) => part.replace(/^0+(?=.)/, "")).join(":") + "::/64";
+}
+
+// New workspaces per IP per day (acard-open-tiers). Sign-up itself goes to Supabase directly (Google; email sign-up is
+// closed, #173), but nobody reaches the app without a profile, so a new profile is where an account becomes a
+// workspace and where this counts. Shared lines (offices, schools) stay well inside it.
+export const NEW_PROFILES_PER_IP_DAY = 5;
+
+async function newProfileAllowed(request: Request, env: AccountEnv): Promise<boolean> {
+  if (!env.WORKSPACE) return true;
+  const ip = ipBucket(request.headers.get("cf-connecting-ip") ?? "local");
+  return env.WORKSPACE.get(env.WORKSPACE.idFromName("rate-limit")).hit("new-profile:" + ip, NEW_PROFILES_PER_IP_DAY, 86_400);
 }
 
 export const ACCOUNT_API = /^\/api\/(?:auth\/|hooks\/send-email$|dev\/outbox$|me$|profile$|handle$|account\/delete$)/;
 
-export async function accountApi(request: Request, env: AccountEnv, url: URL, oauthCleanup?: (userId: string) => Promise<number>): Promise<Response> {
+function desktopHandoffPage(request: Request, email?: string): Response {
+  const lang = pickLang(request);
+  const esc = (value: string) => value.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+  const title = t(lang, email ? "desktop.handoff.title" : "desktop.handoff.restart");
+  return new Response(`<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} - Acard</title><link rel="stylesheet" href="/_site/styles.css"><link rel="stylesheet" href="/_site/auth.css"></head><body><main class="auth"><div class="auth-box"><a class="auth-logo" href="/">Acard</a><h1>${esc(title)}</h1>${email ? `<p>${esc(email)}</p><p>${esc(t(lang, "desktop.handoff.body"))}</p><a class="btn btn-primary" href="acard://auth/done">${esc(t(lang, "desktop.handoff.open"))}</a><script>location.href="acard://auth/done"</script>` : ""}</div></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
+}
+
+// hostedCleanup: the hosted service's own data of the account (gate/cloud.ts deleteHostedData: published pages, cloud
+// backups, synced copy, feedback / AI usage / waitlist rows); the self-host edition has none.
+export async function accountApi(request: Request, env: AccountEnv, url: URL, oauthCleanup?: (userId: string) => Promise<number>, hostedCleanup?: (userId: string, email: string | null) => Promise<unknown>): Promise<Response> {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return err(503, "not_configured", "준비 중이에요.");
   const path = url.pathname;
   const post = request.method === "POST";
   if (post && !path.startsWith("/api/hooks/")) {
     const origin = request.headers.get("origin");
     if (origin && origin !== url.origin) return err(403, "bad_origin", "forbidden");
+  }
+
+  if (path === "/api/auth/desktop/start" && request.method === "GET") {
+    const challenge = url.searchParams.get("challenge") ?? "";
+    const provider = url.searchParams.get("provider");
+    if (!DESKTOP_CHALLENGE.test(challenge) || (provider !== "google" && provider !== "email")) return err(400, "bad_request", "요청 형식이 올바르지 않아요.");
+    return redirect((provider === "google" ? "/api/auth/google" : "/login") + "?next=" + encodeURIComponent(DESKTOP_HANDOFF), [setCookie(DESKTOP, challenge, 600)]);
+  }
+
+  if (path === DESKTOP_HANDOFF && request.method === "GET") {
+    const session = await readSession(request, env);
+    if (!session) return redirect("/login?next=" + encodeURIComponent(DESKTOP_HANDOFF));
+    const challenge = readCookies(request)[DESKTOP] ?? "";
+    if (!DESKTOP_CHALLENGE.test(challenge)) return withCookies(desktopHandoffPage(request), session.set);
+    if (!env.OUTBOX?.delete || !env.SUPABASE_SERVICE_ROLE_KEY) return withCookies(err(503, "not_configured", "준비 중이에요."), session.set);
+    const email = session.user.email;
+    if (!email) return withCookies(err(400, "bad_email", "이메일 주소를 확인해 주세요."), session.set);
+    // Mint a separate GoTrue session; never copy the browser's rotating refresh token into the app.
+    const r = await gotrue(env, "/admin/generate_link", { admin: true, body: { type: "magiclink", email } });
+    // The REST response is flat; Supabase's SDK exposes the same fields under properties.
+    const token_hash = r.data?.hashed_token ?? r.data?.properties?.hashed_token;
+    if (!r.ok || typeof token_hash !== "string" || !token_hash) return withCookies(err(502, "handoff_failed", "로그인하지 못했어요. 다시 시도해 주세요."), session.set);
+    await env.OUTBOX.put("desktop-auth:" + challenge, JSON.stringify({ token_hash, email }), { expirationTtl: 300 });
+    return withCookies(desktopHandoffPage(request, email), [...session.set, setCookie(DESKTOP, "", 0)]);
+  }
+
+  if (path === "/api/auth/desktop/redeem" && post) {
+    // A two-second poll needs 30 requests/minute; keep other login routes at their existing limit.
+    const lim = await limited(request, env, "desktop-redeem", 60); if (lim) return lim;
+    const body = await request.json().catch(() => null) as { verifier?: unknown } | null;
+    if (typeof body?.verifier !== "string" || !/^[A-Za-z0-9._~-]{43,128}$/.test(body.verifier)) return err(400, "bad_verifier", "요청 형식이 올바르지 않아요.");
+    if (!env.OUTBOX?.delete) return err(503, "not_configured", "준비 중이에요.");
+    const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.verifier)));
+    const key = "desktop-auth:" + challenge;
+    const stored = await env.OUTBOX.get(key);
+    if (!stored) return json({ pending: true }, 202);
+    await env.OUTBOX.delete(key);
+    const { token_hash } = JSON.parse(stored);
+    // KV is eventually consistent; GoTrue's one-use token is the final replay barrier.
+    const r = await gotrue(env, "/verify", { body: { type: "magiclink", token_hash } });
+    if (!r.ok) return err(400, "handoff_expired", "링크가 만료됐어요. 다시 요청해 주세요.");
+    return withCookies(json({ ok: true }), sessionCookies(r.data));
   }
 
   if (path === "/api/hooks/send-email" && post) {
@@ -209,6 +313,9 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
     try { parsed = JSON.parse(body); } catch { return err(400, "bad_json", "요청 형식이 올바르지 않아요."); }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.user || typeof parsed.user !== "object" || Array.isArray(parsed.user) || !parsed.email_data || typeof parsed.email_data !== "object" || Array.isArray(parsed.email_data)) return err(400, "bad_json", "요청 형식이 올바르지 않아요.");
     const { user, email_data } = parsed;
+    // A direct GoTrue sign-up (anon key on /auth/v1/signup, or /auth/v1/otp for an unknown email) asks for this mail
+    // inside its transaction; a hook error rolls the new user back, so no account is made (#173).
+    if (email_data.email_action_type === "signup") return json({ error: { http_code: 403, message: "Email sign-up is closed" } });
     const site = siteUrl(env, request);
     const back = typeof email_data.redirect_to === "string" && email_data.redirect_to.startsWith(site + "/") ? signupNext(email_data.redirect_to.slice(site.length)) : null;
     const next = back ? "&next=" + encodeURIComponent(back) : "";
@@ -226,19 +333,7 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
     return json({ mails: mails.filter(Boolean).sort((a, b) => a.at.localeCompare(b.at)) });
   }
 
-  if (path === "/api/auth/signup" && post) {
-    const lim = await limited(request, env, "signup"); if (lim) return lim;
-    const c = await readCreds(request); if (c instanceof Response) return c;
-    const destination = c.next !== "/" ? `?redirect_to=${encodeURIComponent(siteUrl(env, request) + c.next)}` : "";
-    const r = await gotrue(env, "/signup" + destination, { body: { email: c.email, password: c.password } });
-    if (!r.ok) {
-      const code = gotrueCode(r.data);
-      if (code === "weak_password") return err(400, code, "더 강한 비밀번호를 써 주세요.");
-      if (code === "over_email_send_rate_limit" || r.status === 429) return err(429, "rate_limited", "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.");
-      return err(400, code, "가입하지 못했어요. 입력을 확인해 주세요.");
-    }
-    return json({ ok: true, next: "verify" });
-  }
+  if (path === "/api/auth/signup") return err(403, "email_signup_closed", EMAIL_SIGNUP_CLOSED);
 
   if (path === "/api/auth/login" && post) {
     const lim = await limited(request, env, "login"); if (lim) return lim;
@@ -324,6 +419,14 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
       body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleCallback(env, request), grant_type: "authorization_code", code_verifier: verifier }),
     }).then((res) => (res.ok ? res.json() : null)).catch(() => null);
     if (typeof tokens?.id_token !== "string") return fail;
+    // The id_token came straight from Google's token endpoint (TLS, our client secret), so its email can be read here to
+    // refuse a first Google sign-in before GoTrue creates the account. A failed lookup lets the sign-in through: the web
+    // app entry gate (agent-entry.ts webEntryAllowed) still keeps an account without beta access out.
+    if (env.BETA_MODE === "internal") {
+      const email = idTokenEmail(tokens.id_token);
+      if (!email) return fail;
+      if (noNewAccounts(env, email) && (await accountExists(env, email)) === false) return redirect("/signup", [setCookie(GAUTH, "", 0), setCookie(NEXT, "", 0)]);
+    }
     const r = await gotrue(env, "/token?grant_type=id_token", { body: { provider: "google", id_token: tokens.id_token, nonce } });
     if (!r.ok) return fail;
     return redirect(safeNext(jar[NEXT]), [...sessionCookies(r.data), setCookie(GAUTH, "", 0), setCookie(NEXT, "", 0)]);
@@ -355,7 +458,8 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
         avatar_url: googleAvatar(meta),
         handle: await suggestHandle(env, me),
       };
-      return withCookies(json({ email: me.user.email, profile, suggest }), me.set);
+      const consent_needed = !profile && !(await hasSignupConsent(env, String(me.user.email ?? "").toLowerCase()).catch(() => false));
+      return withCookies(json({ email: me.user.email, profile, suggest, consent_needed }), me.set);
     } catch {
       return withCookies(err(502, "profile_unavailable", "프로필을 불러오지 못했어요."), me.set);
     }
@@ -408,6 +512,13 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
       r = await rest(env, me.token, `/profiles?id=eq.${me.user.sub}&select=${PROFILE_COLS}`, { method: "PATCH", body: patch, prefer: "return=representation" });
     } else {
       if (!patch.display_name || !patch.handle) return err(400, "incomplete", "이름과 공개 주소를 먼저 정해 주세요.");
+      const email = String(me.user.email ?? "").toLowerCase();
+      // Google sign-up has no form before this step, so a first profile needs the sign-up consents once (#166).
+      if (!(await hasSignupConsent(env, email).catch(() => false))) {
+        if (!hasConsent("signup", body.consent)) return err(400, "consent_required", "필수 동의 세 가지에 모두 체크해 주세요.");
+        await recordConsent(env, email, "signup");
+      }
+      if (!(await newProfileAllowed(request, env))) return err(429, "too_many_accounts", "이 네트워크에서 오늘 만든 계정이 너무 많아요. 내일 다시 해 주세요.");
       r = await rest(env, me.token, `/profiles?select=${PROFILE_COLS}`, { body: { id: me.user.sub, avatar_url: googleAvatar(me.user.user_metadata), ...patch }, prefer: "return=representation" });
     }
     if (!r.ok) {
@@ -426,7 +537,10 @@ export async function accountApi(request: Request, env: AccountEnv, url: URL, oa
   if (path === "/api/account/delete" && post) {
     const ws = workspaceIdFor(me.user.sub, env);
     if (ws === OWNER_WS) return err(403, "owner_account", "오너 계정은 여기서 지울 수 없어요.");
+    // Everything the account made goes before the auth user, so a failure leaves an account that can try again.
     const wiped = await wipeWorkspace(env, ws);
+    try { if (hostedCleanup) await hostedCleanup(me.user.sub, typeof me.user.email === "string" ? me.user.email : null); }
+    catch (error) { console.error("acard account delete: hosted data", (error as Error).message); return err(500, "delete_failed", "계정을 삭제하지 못했어요."); }
     const grants = oauthCleanup ? await oauthCleanup(oauthUserId(ws)) : 0;
     const r = await gotrue(env, `/admin/users/${me.user.sub}`, { method: "DELETE", admin: true });
     if (!r.ok) return err(500, "delete_failed", "계정을 삭제하지 못했어요.");

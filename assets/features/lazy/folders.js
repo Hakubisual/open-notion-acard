@@ -21,7 +21,11 @@
   function href(slug) { return editor ? "/edit/" + encodeURIComponent(slug) + "/" : slug === "index" ? "/home/" : "/" + encodeURIComponent(slug) + "/"; }
   function api(method, path, body) {
     // keepalive: a drop is drawn at once, so a click on a link right after it must not cancel the save.
-    return fetch(path, { method: method, keepalive: method !== "GET", headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined })
+    // x-acard-client marks the live notice of this write as this tab's own (live.js), so the reader does not re-read a page
+    // this tab just trashed - that failed re-read reloaded the trashed address over the move to its parent (issue 162).
+    var headers = body ? { "content-type": "application/json" } : {};
+    if (method !== "GET" && window.AcardLive && window.AcardLive.client) headers["x-acard-client"] = window.AcardLive.client;
+    return fetch(path, { method: method, keepalive: method !== "GET", headers: headers, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(d.error || "실패했어요."); e.data = d; e.status = r.status; throw e; } return d; }); });
   }
   function withShare(method, path, body) {
@@ -345,7 +349,7 @@
       { label: "새 하위 폴더", fn: function () { newFolder(p.slug); } },
       { label: "삭제", danger: true, fn: function () {
         if (p.slug === S.journal && !window.confirm("에이전트 작업 기록 전체를 휴지통으로 옮길까요? 새 세션이 오면 그룹이 다시 만들어져요.")) return;
-        api("POST", "/api/folders/bulk", { action: "trash", slugs: [p.slug] }).then(function (d) { toast("휴지통으로 옮겼어요.", d.batch); if (p.slug === current) location.href = "/"; else reload(); }, oops);
+        api("POST", "/api/folders/bulk", { action: "trash", slugs: [p.slug] }).then(function (d) { toast("휴지통으로 옮겼어요.", d.batch); if (p.slug === current) location.href = p.parent && S.bySlug[p.parent] ? href(p.parent) : "/home/"; else reload(); }, oops);
       } },
     ]);
   }

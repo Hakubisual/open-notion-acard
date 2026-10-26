@@ -43,7 +43,7 @@ test("published page (#102): date and access pill in the byline, reader block rh
   expect((await h.call("POST", "/api/pages", { title: "Plan", slug: "plan" })).status).toBe(200);
   expect((await h.call("PUT", "/api/page/plan", { title: "Plan", blocks: [{ id: "h", type: "heading2", text: "Step" }, { id: "p", type: "paragraph", text: "Body" }] })).status).toBe(200);
   const link = (await h.call("POST", "/api/page/plan/share")).data as { url: string };
-  const response = await h.worker.fetch(new Request("https://notes.test" + link.url), h.env);
+  const response = await h.worker.fetch(new Request("https://notes.test" + link.url, { headers: { cookie: "acard_lang=ko" } }), h.env);
   expect(response.status).toBe(200);
   const html = await response.text();
   const meta = /<p class="sv-meta">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
@@ -51,4 +51,33 @@ test("published page (#102): date and access pill in the byline, reader block rh
   expect(meta).toContain("읽기 전용");
   expect(html).toContain(".sv-main .blocks>h2{margin:var(--space-12) 0 var(--space-3)}");
   expect(html).toContain(".sv-icon{display:grid;place-items:center;width:88px;height:88px;margin:-44px 0 var(--space-6)");
+});
+
+test("shared page words follow the reader's language: English by default, Korean for a Korean browser or choice (acard-landing-english-shots)", async () => {
+  expect((await h.call("POST", "/api/pages", { title: "Plan", slug: "plan" })).status).toBe(200);
+  expect((await h.call("PUT", "/api/page/plan", { title: "Plan", blocks: [{ id: "a", type: "heading2", text: "One" }, { id: "b", type: "heading2", text: "Two" }] })).status).toBe(200);
+  const url = ((await h.call("PUT", "/api/page/plan/access/general", { mode: "link", role: "read" })).data as any).link.url as string;
+  const open = async (headers: Record<string, string> = {}) => h.worker.fetch(new Request("https://notes.test" + url, { headers }), h.env);
+  const en = await open();
+  const page = await en.text();
+  expect(en.headers.get("content-language")).toBe("en");
+  expect(page).toContain('<html lang="en">');
+  expect(/<p class="sv-meta">([\s\S]*?)<\/p>/.exec(page)?.[1]).toMatch(/<span>Edited [A-Z][a-z]+ \d{1,2}, \d{4}<\/span>[\s\S]*Share link · Read-only/);
+  expect(page).toContain(">Request edit access</a><small>When the owner approves, you get an invite link and code by email.</small>");
+  expect(page).toContain("<summary>Contents</summary>");
+  // No Korean outside the author's own text on an English page.
+  expect(page.replace(/<style>[\s\S]*?<\/style>/g, "").match(/[\uac00-\ud7a3]+/g)).toBeNull();
+  for (const headers of [{ "accept-language": "ko-KR,ko;q=0.9" }, { cookie: "acard_lang=ko" }] as Record<string, string>[]) {
+    const ko = await (await open(headers)).text();
+    expect(ko).toContain('<html lang="ko">');
+    expect(ko).toContain("공유 링크 · 읽기 전용");
+    expect(ko).toContain(">편집 권한 요청</a>");
+  }
+  // An explicit English choice beats a Korean browser.
+  expect(await (await open({ cookie: "acard_lang=en", "accept-language": "ko-KR" })).text()).toContain("Share link · Read-only");
+  // Phone: the hairline before the pill is dropped (it would hang alone once the pill wraps) and the ask button sits 8 px
+  // under the meta row (24 px phone margin minus 16) instead of touching the pill.
+  const phone = /@media \(max-width:640px\)\{[^@]*/.exec(page)?.[0] ?? "";
+  expect(phone).toContain(".sv-meta .sv-when+.sv-pill{padding-left:0;border-left:0}");
+  expect(phone).toContain(".sv-edit{margin-top:calc(var(--space-6) * -1 + var(--space-2))}");
 });

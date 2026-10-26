@@ -13,6 +13,22 @@ function paintAvatar(url, name) {
 }
 let avatarUrl = null;
 
+// Required consents (#166): "agree to all" ticks every box, and the ticked values travel as body.consent; the server
+// refuses a request without them, so this only saves a round trip.
+const wireConsent = (box) => {
+  if (!box) return () => [];
+  const all = box.querySelector("[data-consent-all]");
+  const items = [...box.querySelectorAll('input[name="consent"]')];
+  all.addEventListener("change", () => items.forEach((i) => { i.checked = all.checked; }));
+  items.forEach((i) => i.addEventListener("change", () => { all.checked = items.every((x) => x.checked); }));
+  return () => (box.hidden || items.some((i) => !i.checked) ? null : items.map((i) => i.value));
+};
+const consentBox = step1.querySelector(".consent");
+const consent = wireConsent(consentBox);
+// Ticks made on the sign-up page before Google sign-in (assets/_site/auth.js); without them the box is shown here.
+let carried = null;
+try { carried = JSON.parse(sessionStorage.getItem("acard-signup-consent") || "null"); } catch {}
+
 function goto(n) {
   step1.hidden = n !== 1; step2.hidden = n !== 2; $("step3").hidden = n !== 3;
   $("back").hidden = n !== 2;
@@ -131,7 +147,12 @@ step1.addEventListener("submit", async (e) => {
   if (!nameIn.value.trim()) { show(step1, "err", T("js.onb.nameReq")); nameIn.focus(); return; }
   clearTimeout(timer); await checkHandle();
   if (!handleOk) { handleIn.focus(); return; }
-  if (await save({ display_name: nameIn.value, handle: handleIn.value }, step1)) goto(2);
+  const payload = { display_name: nameIn.value, handle: handleIn.value };
+  if (!consentBox.hidden) {
+    payload.consent = consent();
+    if (!payload.consent) { show(step1, "err", T("js.consent.required")); return; }
+  } else if (carried) payload.consent = carried;
+  if (await save(payload, step1)) { try { sessionStorage.removeItem("acard-signup-consent"); } catch {} goto(2); }
 });
 
 const ORDER = ["board", "progress", "blog", "notes"];
@@ -162,7 +183,8 @@ $("back").addEventListener("click", () => goto(1));
   const res = await fetch("/api/profile");
   if (res.status === 401) { location.replace("/login"); return; }
   if (!res.ok) { location.replace("/?gate=error"); return; }
-  const { profile, suggest } = await res.json();
+  const { profile, suggest, consent_needed } = await res.json();
+  consentBox.hidden = !consent_needed || Array.isArray(carried);
   if (new URLSearchParams(location.search).get("step") === "connect" && profile?.onboarded_at) { goto(3); return; }
   const src = profile ?? suggest;
   avatarUrl = src.avatar_url;

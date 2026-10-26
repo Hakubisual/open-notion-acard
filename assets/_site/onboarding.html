@@ -8,6 +8,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="preload" href="/fonts/pretendard-core.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/_site/styles.css">
 <link rel="stylesheet" href="/_site/auth.css">
 <link rel="stylesheet" href="/_site/onboarding.css">
@@ -36,6 +37,7 @@
         <p class="handle-state" id="handle-state" aria-live="polite"></p>
         <p class="hint" data-i18n="onb.handleHint">Reserved as your public blog address (opening soon)</p>
       </div>
+      <fieldset class="consent" hidden><label class="consent-all"><input type="checkbox" data-consent-all><span data-i18n="consent.all">I agree to all required items below</span></label><div class="consent-item"><label><input type="checkbox" name="consent" value="terms" required><span data-i18n-html="consent.terms">[Required] I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a></span></label></div><div class="consent-item"><label><input type="checkbox" name="consent" value="privacy" required><span data-i18n="consent.privacy">[Required] I am 14 or older and agree to the collection and use of my personal information</span></label><details><summary data-i18n="consent.more">Details</summary><p data-i18n-html="consent.privacy.detailSignup">Items: email, password (hashed), name and profile picture if you use Google sign-in, what you write · Purpose: running your account, sign-in and service notices · Kept: until you delete the account · You may refuse, but then you can't sign up. <a href="/privacy" target="_blank" rel="noopener">Full policy</a></p></details></div><div class="consent-item"><label><input type="checkbox" name="consent" value="overseas" required><span data-i18n="consent.overseas">[Required] I agree to the transfer of my personal information abroad</span></label><details><summary data-i18n="consent.more">Details</summary><p data-i18n-html="consent.overseas.detailSignup">Supabase Pte. Ltd. (Singapore, privacy@supabase.com) - account database · Cloudflare, Inc. (United States and others, privacyquestions@cloudflare.com) - running the site, storing web app notes and files, some AI features · Plus Five Five, Inc./Resend (United States, sending servers in Japan, support@resend.com) - emails. Sent over an encrypted connection and kept for the periods in the privacy policy. If you refuse, you can't sign up.</p></details></div></fieldset>
       <button class="btn btn-primary btn-wide" type="submit" data-i18n="onb.next">Next</button>
       <div class="msg" role="status"></div>
     </form>

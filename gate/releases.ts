@@ -3,13 +3,13 @@
 // release per version tagged v<version>. desktop-release.json at the repository root is the one place that says which
 // version is current for each platform; publishing = upload the release there, then bump the version and deploy.
 //   GET /download                         the download page (assets/_site/download.html), versions filled in here
-//   GET /download/<windows|mac-arm64|mac-x64>   302 to the current installer
-//   GET /releases/<win|mac>/latest*.yml   electron-updater feed of the current version (copied from the release)
-//   GET /releases/<win|mac>/Acard-<ver>-* 302 to that version's file (installer, zip, blockmap) named by the feed
+//   GET /download/<windows|mac-arm64|mac-x64|linux-appimage|linux-tar>   302 to the current installer
+//   GET /releases/<win|mac|linux>/latest*.yml   electron-updater feed of the current version (copied from the release)
+//   GET /releases/<win|mac|linux>/Acard-<ver>-* 302 to that version's file (installer, archive, blockmap) named by the feed
 import release from "../desktop-release.json";
 
-export type Platform = "win" | "mac";
-type ReleaseConfig = { repo: string; win?: { version: string; date: string }; mac?: { version: string; date: string } };
+export type Platform = "win" | "mac" | "linux";
+type ReleaseConfig = { repo: string } & Partial<Record<Platform, { version: string; date: string }>>;
 
 export const RELEASE = release as ReleaseConfig;
 
@@ -18,8 +18,11 @@ const DOWNLOADS: Record<string, { platform: Platform; file: (version: string) =>
   windows: { platform: "win", file: (v) => `Acard-${v}-win-x64.exe` },
   "mac-arm64": { platform: "mac", file: (v) => `Acard-${v}-mac-arm64.dmg` },
   "mac-x64": { platform: "mac", file: (v) => `Acard-${v}-mac-x64.dmg` },
+  // electron-builder 26's getArtifactArchName maps x64 to x86_64 for AppImage, but not tar.gz.
+  "linux-appimage": { platform: "linux", file: (v) => `Acard-${v}-linux-x86_64.AppImage` },
+  "linux-tar": { platform: "linux", file: (v) => `Acard-${v}-linux-x64.tar.gz` },
 };
-const FEEDS: Record<Platform, string> = { win: "latest.yml", mac: "latest-mac.yml" };
+const FEEDS: Record<Platform, string> = { win: "latest.yml", mac: "latest-mac.yml", linux: "latest-linux.yml" };
 
 export function currentVersion(platform: Platform, config: ReleaseConfig = RELEASE): string | null {
   const version = config[platform]?.version;
@@ -44,7 +47,7 @@ export async function releaseRoute(request: Request, path: string, config: Relea
     const version = currentVersion(target.platform, config);
     return version ? redirectTo(assetUrl(version, target.file(version), config), 300) : redirectTo("/download", 0);
   }
-  const feed = /^\/releases\/(win|mac)\/([^/]+)$/.exec(path);
+  const feed = /^\/releases\/(win|mac|linux)\/([^/]+)$/.exec(path);
   if (!feed) return null;
   const platform = feed[1] as Platform;
   const file = decodeURIComponent(feed[2]);

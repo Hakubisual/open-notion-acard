@@ -34,6 +34,8 @@ async function boot(port: number, intervalMs: number) {
 
 const autoFiles = (dataDir: string) => { try { return readdirSync(join(dataDir, "backups")).filter((n) => /^auto-\d{8}-\d{6}\.zip$/.test(n)); } catch { return []; } };
 
+// Boots the local app and waits for its first auto check 3 s after start (3.3-5.5 s alone), so bun's 5 s default is too
+// tight under full-suite load; 30 s leaves room for the 20 s backup wait to fail with its own message.
 test("with a short interval the local app saves an auto backup by itself, readable as an archive, and reports its time", async () => {
   const local = await boot(47961, 60_000);
   const made = await (await local.call("/api/pages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "자동 백업 대상" }) })).json() as { slug: string };
@@ -53,7 +55,7 @@ test("with a short interval the local app saves an auto backup by itself, readab
   const again = await (await local.call("/__local/archive/auto")).json() as any;
   expect(again.local.name).toBe(status.local.name);
   expect(again.next).toBe(status.local.at + 60_000);
-});
+}, 30_000);
 
 test("only the newest 7 auto backups stay; restore safety copies are left alone", async () => {
   const local = await boot(47962, 3_600_000);
@@ -65,4 +67,4 @@ test("only the newest 7 auto backups stay; restore safety copies are left alone"
   expect(readdirSync(join(local.dataDir, "backups"))).toContain("before-restore-20260101-0000.zip");
   const status = await (await local.call("/__local/archive/auto")).json() as any;
   expect(status.files[0]).toBe(files[files.length - 1]);
-});
+}, 15_000); // boots the local app and writes 9 archives (0.6-2.6 s alone); the 5 s default is too tight under full-suite load

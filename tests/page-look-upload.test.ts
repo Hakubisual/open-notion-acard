@@ -105,25 +105,45 @@ describe("icon / cover upload (POST /api/upload?kind=)", () => {
     expect(h.ledger.state.used).toBe(0);
   });
 
-  test("a member workspace stops at 200 MB with a message; usage is reported for settings", async () => {
+  test("a free member workspace stops at 500 MB with a message; usage is reported for settings", async () => {
     const h = await harness(true);
-    await h.env.DB.prepare("INSERT INTO media (id, page, name, mime, bytes, created) VALUES ('aaaaaaaaaaaaaaaa', 'look', 'old.png', 'image/png', ?, 1)").bind(200 * 1000 * 1000 - 10).run();
+    h.env.ACARD_MEDIA_PLAN = async () => ({ tier: "free", quota: 500 * 1000 * 1000, passUntil: null });
+    await h.env.DB.prepare("INSERT INTO media (id, page, name, mime, bytes, created) VALUES ('aaaaaaaaaaaaaaaa', 'look', 'old.png', 'image/png', ?, 1)").bind(500 * 1000 * 1000 - 10).run();
     const res = await h.upload(png(10, 10), "one.png", "image/png");
     expect(res.status).toBe(507);
-    expect((await res.json() as any).error).toContain("200MB");
+    expect((await res.json() as any).error).toContain("무료 계정의 파일 저장 공간(500MB)");
     expect(h.r2.objects.size).toBe(0);
     const usage = await (await h.request("/api/media-usage")).json() as any;
-    expect(usage).toMatchObject({ used: 200 * 1000 * 1000 - 10, quota: 200 * 1000 * 1000, fileLimit: 10 * 1024 * 1024 });
+    expect(usage).toMatchObject({ used: 500 * 1000 * 1000 - 10, quota: 500 * 1000 * 1000, tier: "free", passUntil: null, fileLimit: 10 * 1024 * 1024 });
   });
 
-  test("the global ledger refuses past 9.5 GB and counts what it stored", async () => {
+  test("the same bytes fit a beta / free-pass account's 10 GB; a failed plan lookup falls back to the global cap only", async () => {
+    const h = await harness(true);
+    await h.env.DB.prepare("INSERT INTO media (id, page, name, mime, bytes, created) VALUES ('aaaaaaaaaaaaaaaa', 'look', 'old.png', 'image/png', ?, 1)").bind(500 * 1000 * 1000 - 10).run();
+    h.env.ACARD_MEDIA_PLAN = async () => ({ tier: "pass", quota: 10 * 1000 * 1000 * 1000, passUntil: "2027-01-24T00:00:00.000Z" });
+    expect((await h.upload(png(10, 10), "one.png", "image/png")).status).toBe(200);
+    expect(await (await h.request("/api/media-usage")).json()).toMatchObject({ quota: 10 * 1000 * 1000 * 1000, tier: "pass", passUntil: "2027-01-24T00:00:00.000Z" });
+    h.env.ACARD_MEDIA_PLAN = async () => { throw new Error("supabase down"); };
+    expect((await h.upload(png(10, 10), "two.png", "image/png")).status).toBe(200);
+    h.env.ACARD_MEDIA_PLAN = undefined;
+    expect((await h.upload(png(10, 10), "three.png", "image/png")).status).toBe(507);
+  });
+
+  test("the global ledger refuses past 100 GB, mails once per 10/30/50/80 GB step and counts what it stored", async () => {
     const h = await harness();
-    h.ledger.state.used = 9.5e9 - 20;
-    expect((await h.upload(png(10, 10), "fits.png", "image/png")).status).toBe(507);
-    h.ledger.state.used = 9.5e9 - 40;
-    expect((await h.upload(png(10, 10), "fits.png", "image/png")).status).toBe(200);
-    expect(h.ledger.state.used).toBe(9.5e9 - 40 + 33);
-    expect(h.ledger.state.alerted).toBe(2);
+    h.ledger.state.used = 10e9 - 20;
+    expect((await h.upload(png(10, 10), "a.png", "image/png")).status).toBe(200);
+    expect(h.ledger.state.alerted).toBe(1);
+    h.ledger.state.used = 79e9;
+    expect((await h.upload(png(10, 10), "b.png", "image/png")).status).toBe(200);
+    expect(h.ledger.state.alerted).toBe(3);
+    h.ledger.state.used = 100e9 - 20;
+    expect((await h.upload(png(10, 10), "c.png", "image/png")).status).toBe(507);
+    expect(h.ledger.state.alerted).toBe(5);
+    h.ledger.state.used = 100e9 - 40;
+    expect((await h.upload(png(10, 10), "d.png", "image/png")).status).toBe(200);
+    expect(h.ledger.state.used).toBe(100e9 - 40 + 33);
+    expect(h.ledger.state.alerted).toBe(5);
   });
 
   test("deleting a media file frees its bytes in the ledger", async () => {

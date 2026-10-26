@@ -21,7 +21,20 @@ export async function visualsChunk(): Promise<{ js: string; css: string }> {
   return { js: await built.outputs[0].text(), css: css + "\n" };
 }
 
+// Large uploads (acard-upload-100mb): the upload bar (big-upload) and the browser video re-encode (video-encode, with
+// mediabunny bundled in) are separate lazy chunks, so the editor loads neither until a big file or a video is added.
+export async function bigUploadChunk(): Promise<{ js: string; css: string }> {
+  const built = await Bun.build({ entrypoints: [join(SRC, "big-upload.js")], minify: true, target: "browser" });
+  if (!built.success) throw new Error(built.logs.map(String).join("\n"));
+  const css = (await Bun.file(join(SRC, "big-upload.css")).text()).split("\n").map((line) => line.trim()).filter(Boolean).join("");
+  return { js: await built.outputs[0].text(), css: css + "\n" };
+}
+
 if (import.meta.main) {
+  const big = await bigUploadChunk();
+  await Bun.write(join(OUT, "big-upload.js"), big.js);
+  await Bun.write(join(OUT, "big-upload.css"), big.css);
+  console.log("big-upload chunk", big.js.length + big.css.length, "bytes");
   const visuals = await visualsChunk();
   await Bun.write(join(OUT, "visuals.js"), visuals.js);
   await Bun.write(join(OUT, "visuals.css"), visuals.css);

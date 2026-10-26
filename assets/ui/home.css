@@ -70,6 +70,7 @@ body.home-custom #article { display: none; }
 .wg-head { display: flex; align-items: center; gap: var(--space-4); margin-bottom: 18px; }
 .wg-head h2 { margin: 0; font-size: var(--fs-21); font-weight: 800; }
 .wg-sub { margin: 2px 0 0; color: var(--color-text-dim); font-size: var(--fs-14); }
+.wg-tools { margin-top: 8px; }
 .wg-icon { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--color-accent-soft); color: var(--color-accent); }
 .wg-icon svg { width: 22px; height: 22px; }
 .wg-meter { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--color-text-dim); font-size: var(--fs-14); white-space: nowrap; }

@@ -131,6 +131,8 @@
     function list(el, depth) {
       var todoList = /to-do|task|checklist/i.test(el.className || "");
       Array.prototype.forEach.call(el.children, function (li) {
+        // Google Docs writes a nested list beside its parent item, not inside it.
+        if (/^(UL|OL)$/.test(li.tagName)) return list(li, depth + 1);
         if (li.tagName !== "LI") return;
         var box = li.querySelector('input[type="checkbox"], .checkbox');
         var todo = todoList || (box && box.closest("li") === li);
@@ -146,6 +148,13 @@
       if (node.nodeType === 3) { if (node.nodeValue.trim()) out.push(textBlock("paragraph", [{ text: node.nodeValue }], { indent: depth })); return; }
       if (node.nodeType !== 1 || SKIP[node.tagName]) return;
       var tag = node.tagName, push = function (block) { block.indent = depth; if (block.text || block.type !== "paragraph") out.push(block); };
+      // Word writes list items as paragraphs: mso-list:lN levelK gives the level, a mso-list:Ignore span holds the marker.
+      var wordLevel = tag === "P" && /mso-list:\s*l\d+\s+level(\d+)/.exec(node.getAttribute("style") || "");
+      if (wordLevel) {
+        var marker = node.querySelector('[style*="mso-list:Ignore"]'), mark = marker ? marker.textContent.trim() : "";
+        if (marker) marker.remove();
+        return out.push(textBlock(/^[\dA-Za-z]{1,3}[.)]$/.test(mark) ? "numbered" : "bulleted", runsOf(node, {}, []), { indent: depth + Number(wordLevel[1]) - 1 }));
+      }
       if (/^H[1-6]$/.test(tag)) return push(textBlock("heading" + Math.min(3, Number(tag[1])), runsOf(node, {}, [])));
       if (tag === "UL" || tag === "OL") return list(node, depth);
       if (tag === "BLOCKQUOTE") return push(Object.assign(textBlock("quote", runsOf(node, {}, [])), {}));
@@ -189,7 +198,16 @@
         parts.forEach(function (runs) { if (runs.length) push(textBlock("paragraph", runs)); });
         return;
       }
-      Array.prototype.forEach.call(node.childNodes, function (child) { walk(child, depth); });
+      var inline = document.createElement("p");
+      function flushInline() {
+        if (inline.childNodes.length) { walk(inline, depth); inline = document.createElement("p"); }
+      }
+      Array.prototype.forEach.call(node.childNodes, function (child) {
+        if (child.nodeType === 1 && (/^(P|DIV|H[1-6]|UL|OL|TABLE|PRE|BLOCKQUOTE|HR|FIGURE|DETAILS|ASIDE|SECTION|ARTICLE|IMG)$/.test(child.tagName) || hasBlockChild(child))) {
+          flushInline(); walk(child, depth);
+        } else inline.appendChild(child.cloneNode(true));
+      });
+      flushInline();
     }
     walk(root, 0);
     return out;
@@ -216,6 +234,9 @@
     return out;
   }
   function insertBlocks(at, blocks) {
+    if (editor.coreEditing && editor.commands && editor.commands.insertBlocks) {
+      if (editor.commands.insertBlocks(blocks, editor.captureSelection())) return;
+    }
     var cur = at.block;
     var base = model.depth(cur);
     blocks.forEach(function (b) { b.indent = base + (b.indent || 0); });
@@ -244,16 +265,37 @@
   var MARKDOWN_SIGNS = /(^|\n)(> \[!|- \[[ xX]\] |\x60{3}|---\n)|\*\*\S|\[\[[^\]\n]+\]\]|\[[^\]\n]+\]\([^)\s]+\)|==\S/;
   function pasteInto(at, host, html, plain) {
     if (at.block.type === "code") return document.execCommand("insertText", false, plain);
-    var info = caret();
-    if (info && !info.collapsed && /^https?:\/\/\S+$/.test(plain.trim()) && model.safeHref(plain.trim())) {
-      var a = document.createElement("a"); a.href = plain.trim(); a.appendChild(info.range.extractContents());
+    if (editor.coreEditing && !(editor.commands && editor.commands.insertBlocks)) {
+      var selection = getSelection(), held = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+      var documentBefore = JSON.stringify(state().blocks);
+      Promise.all([editor.lazy("block-commands"), editor.lazy("editor-selection")]).then(function () {
+        var current = getSelection(), range = current.rangeCount && current.getRangeAt(0);
+        if (!held || !host.isConnected || JSON.stringify(state().blocks) !== documentBefore || !range || range.compareBoundaryPoints(0, held) || range.compareBoundaryPoints(2, held)) {
+          editor.setSave("내용이 바뀌었어요. 동작을 다시 눌러 주세요.", true); return;
+        }
+        pasteInto(at, host, html, plain);
+      }).catch(function (error) { editor.setSave(error.message, true); });
+      return;
+    }
+    var info = caret(), url = plain.trim();
+    if (info && !info.collapsed && /^https?:\/\/\S+$/.test(url) && model.safeHref(url)) {
+      var a = document.createElement("a"); a.href = url; a.appendChild(info.range.extractContents());
       info.range.insertNode(a); host.dispatchEvent(new Event("input", { bubbles: true })); return;
     }
-    if (/^https?:\/\/\S+$/.test(plain.trim()) && (!info || info.collapsed)) offerImage(at, plain.trim());
+    if (/^https?:\/\/\S+$/.test(url) && (!info || info.collapsed)) {
+      if (editor.coreEditing && info) {
+        var offset = info.before.length, before = JSON.stringify(state().blocks);
+        editor.lazy("paste-md").then(function (api) { return api.offerUrl(url, at.block.id, offset, before); }).catch(function (error) { editor.setSave(error.message, true); });
+        return;
+      }
+      editor.lazy("paste-md").then(function (api) { api.offerImage(at, url, showNotice); });
+    }
     // issue 134: markdown from Obsidian or an AI chat (callouts, [[links]], **bold**, front matter) goes through the
     // import reader in the lazy paste-md chunk; a short plain paste stays instant.
     if (!html && MARKDOWN_SIGNS.test(plain) && editor.lazy) {
+      var beforePaste = editor.coreEditing ? JSON.stringify(state().blocks) : null;
       editor.lazy("paste-md").then(function (api) {
+        if (beforePaste !== null && JSON.stringify(state().blocks) !== beforePaste) { editor.setSave("내용이 바뀌었어요. 동작을 다시 눌러 주세요.", true); return; }
         var pasted = api.pasteBlocks(plain, (state().pages || []).map(function (p) { return { slug: p.slug, title: p.title }; }));
         if (pasted.length) insertBlocks(at, pasted); else document.execCommand("insertText", false, plain);
       }, function () { insertBlocks(at, textBlocks(plain)); });
@@ -295,19 +337,6 @@
       }).catch(function (e) { editor.setSave("첨부 목록을 불러오지 못했어요: " + e.message, true); });
     });
     bar.appendChild(b);
-  }
-
-  function offerImage(at, url) {
-    showNotice("붙여넣은 주소를 이미지로 넣을까요?", { label: "이미지로 넣기", run: function () {
-      editor.setSave("이미지를 가져오는 중…", true);
-      editor.api("/media/import", { method: "POST", body: JSON.stringify({ url: url, page: editor.slug }) }).then(function (res) {
-        var block = state().blocks.find(function (b) { return b.id === at.block.id; });
-        if (block && typeof block.text === "string" && block.text.indexOf(url) >= 0) { block.text = block.text.split(url).join("").trim(); if (block.meta && block.meta.richText) delete block.meta.richText; }
-        editor.insertBlocksAfter(at.block.id, [{ type: "image", text: "", meta: { src: res.url, width: 100 } }]);
-        editor.scheduleSave();
-        editor.setSave("이미지를 넣었어요", false);
-      }).catch(function (error) { editor.setSave("이미지를 가져오지 못했어요: " + error.message, true); });
-    } });
   }
 
   // --- Tables: Tab / arrows between cells, Ctrl+Enter adds a row, TSV / HTML grids paste across cells ---
@@ -559,14 +588,17 @@
   function replaceOne() {
     var cur = find.matches[find.current];
     if (!cur) return;
-    replaceMatch(cur, find.replace.value);
-    cur.host.dispatchEvent(new Event("input", { bubbles: true }));
+    var apply = function () { replaceMatch(cur, find.replace.value); cur.host.dispatchEvent(new Event("input", { bubbles: true })); };
+    if (editor.coreEditing) editor.transact("replace text", apply); else apply();
     paintFind(true);
   }
   function replaceAll() {
     var count = find.matches.length, hosts = new Set();
-    find.matches.slice().reverse().forEach(function (m) { replaceMatch(m, find.replace.value); hosts.add(m.host); });
-    hosts.forEach(function (host) { host.dispatchEvent(new Event("input", { bubbles: true })); });
+    var apply = function () {
+      find.matches.slice().reverse().forEach(function (m) { replaceMatch(m, find.replace.value); hosts.add(m.host); });
+      hosts.forEach(function (host) { host.dispatchEvent(new Event("input", { bubbles: true })); });
+    };
+    if (editor.coreEditing) editor.transact("replace all", apply); else apply();
     find.current = 0; paintFind(false);
     editor.setSave(count + "곳을 바꿨어요", false);
   }
@@ -623,67 +655,10 @@
     if (window.CSS && CSS.highlights) { CSS.highlights.delete("acard-find"); CSS.highlights.delete("acard-find-current"); }
   }
 
-  // --- Files: every dropped or pasted file becomes its own block where it was dropped ---
-  var MAX = 4 * 1024 * 1024;
-  function shrink(file) {
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || !window.createImageBitmap) return Promise.resolve(file);
-    return createImageBitmap(file).then(function (img) {
-      var scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-      if (scale === 1 && file.size <= MAX) return file;
-      var canvas = document.createElement("canvas"); canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      return new Promise(function (ok) { canvas.toBlob(function (blob) { ok(blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file); }, "image/jpeg", 0.88); });
-    }).catch(function () { return file; });
-  }
-  function kindOf(file) {
-    if (/^image\//.test(file.type)) return "image";
-    if (/^video\//.test(file.type)) return "video";
-    if (/^audio\//.test(file.type)) return "audio";
-    if (file.type === "application/pdf" || file.type === "text/plain") return "file";
-    return null;
-  }
   function addFiles(files, target, point) {
     var under = point && document.elementFromPoint(point.x, point.y);
     var at = blockOf(under && blocksEl.contains(under) ? under : target) || blockOf(document.activeElement);
-    var errors = [], accepted = [];
-    files.forEach(function (file) {
-      var kind = kindOf(file);
-      if (!kind) errors.push(file.name + ": 올릴 수 없는 형식");
-      else if (file.size > MAX && kind !== "image") errors.push(file.name + ": 4MB를 넘어요");
-      else accepted.push({ file: file, block: { type: kind, text: kind === "file" ? file.name : "", meta: kind === "image" ? { src: "", width: 100 } : { url: "", name: file.name }, _busy: true } });
-    });
-    if (!accepted.length) { editor.setSave("올리기 실패: " + errors.join(", "), true); return; }
-    var ids;
-    var list = state().blocks;
-    if (at && at.block.type === "image" && !(at.block.meta && at.block.meta.src) && accepted[0].block.type === "image") {
-      Object.assign(at.block, { _busy: true }); accepted[0].block = at.block;
-      ids = [at.block.id].concat(accepted.length > 1 ? editor.insertBlocksAfter(at.block.id, accepted.slice(1).map(function (a) { return a.block; })) : []);
-      if (accepted.length === 1) editor.render();
-    } else if (at) ids = editor.insertBlocksAfter(at.block.id, accepted.map(function (a) { return a.block; }));
-    else if (list.length) ids = editor.insertBlocksAfter(list[list.length - 1].id, accepted.map(function (a) { return a.block; }));
-    else return;
-    var done = 0, failed = errors.slice();
-    editor.setSave("올리는 중… (0/" + accepted.length + ")", true);
-    accepted.forEach(function (item, i) {
-      var block = state().blocks.find(function (b) { return b.id === ids[i]; });
-      shrink(item.file).then(function (file) {
-        if (file.size > MAX) throw new Error("4MB를 넘어요");
-        var form = new FormData(); form.append("file", file, file.name);
-        return net("/api/upload", { method: "POST", body: form }).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (body) { if (!res.ok) throw new Error(body.error || String(res.status)); return body; });
-        });
-      }).then(function (res) {
-        block.meta = Object.assign({}, block.meta, { src: res.url, url: res.url, name: res.name, size: res.size });
-      }).catch(function (error) {
-        failed.push(item.file.name + ": " + error.message);
-      }).then(function () {
-        block._busy = false; done += 1;
-        editor.render();
-        if (done < accepted.length) return editor.setSave("올리는 중… (" + done + "/" + accepted.length + ")", true);
-        editor.scheduleSave();
-        if (failed.length) editor.setSave("올리기 실패: " + failed.join(", "), true);
-      });
-    });
+    editor.lazy("paste-md").then(function (api) { return api.addFiles(files, at, net); }).catch(function (error) { editor.setSave(error.message, true); });
   }
   function onDrop(ev) {
     var files = ev.dataTransfer && ev.dataTransfer.files;
@@ -776,6 +751,7 @@
     document.addEventListener("pointermove", function (ev) { pointerY = ev.clientY; if (!scrollTimer && blocksEl.querySelector(".blk.dragging")) scrollTimer = requestAnimationFrame(edgeScroll); }, true);
     document.addEventListener("keydown", function (ev) {
       var mod = ev.ctrlKey || ev.metaKey;
+      if (editor.coreEditing && (!ev.target.closest('#doc,.acard-find') || ev.key.toLowerCase() === "h")) return;
       if (mod && !ev.altKey && (ev.key === "f" || ev.key === "F" || ev.key === "h" || ev.key === "H") && !ev.isComposing) {
         ev.preventDefault(); ev.stopImmediatePropagation(); openFind(ev.key.toLowerCase() === "h");
       }

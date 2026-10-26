@@ -77,6 +77,98 @@ test("only page HTML, page API, tree and exact shell URLs are cacheable", () => 
   for (const status of [201, 204, 301, 401, 403, 404, 500]) expect(shouldCache(req("/one/"), new Response(null, { status }), origin)).toBe(false);
 });
 
+test("visited editor HTML stays network-first and is available offline with its shell", async () => {
+  const f = fixture();
+  f.network(async () => html('<script src="/app.js?v=abc"></script>editor old'));
+  await f.sw.install();
+  await f.sw.handle(req('/edit/one/'));
+  f.network(async () => html('<script src="/app.js?v=abc"></script>editor new'));
+  const background: Promise<unknown>[] = [];
+  expect(await (await f.sw.handle(req('/edit/one/'), (work: Promise<unknown>) => background.push(work))).text()).toContain('editor new');
+  await Promise.all(background);
+  f.offline();
+  const cached = await f.sw.handle(req('/edit/one/'));
+  expect(cached.status).toBe(200);
+  expect(cached.headers.get('x-acard-offline')).toBe('1');
+  expect(cached.headers.get('x-acard-swr')).toBeNull();
+  expect(await cached.text()).toContain('editor new');
+  await f.caches.delete(cacheName('shell'));
+  expect((await f.sw.handle(req('/edit/one/'))).status).toBe(503);
+});
+
+test("editor startup requires its cached recent-cache script before offline navigation", async () => {
+  const f = fixture();
+  f.network(async () => html('<link rel="preload" as="script" href="/lazy/recent-cache.js?v=abc">'));
+  await f.sw.handle(req("/edit/one/"));
+  f.offline();
+  expect((await f.sw.handle(req("/edit/one/"))).status).toBe(503);
+  const shell = await f.caches.open(cacheName("shell"));
+  await shell.put(origin + "/lazy/recent-cache.js?v=abc", html("script"));
+  expect((await f.sw.handle(req("/edit/one/"))).status).toBe(200);
+});
+
+test("successful page saves retain the visited editor shell for offline reload", async () => {
+  const f = fixture();
+  await f.sw.handle(req("/edit/one/"));
+  await f.sw.handle(req("/one/"));
+  await f.sw.handle(req("/api/page/one", "PUT"));
+  f.offline();
+  expect((await f.sw.handle(req("/edit/one/"))).status).toBe(200);
+  expect((await f.sw.handle(req("/one/"))).status).toBe(503);
+});
+
+test("injected nested scripts are cached at their exact versions for editor startup", async () => {
+  const caches = new MemoryCaches();
+  let online = true;
+  const asset = "/_site/beta.js?v=fixture";
+  const sw = createOfflineWorker({ caches, origin, report: () => {}, fetch: async (request: Request) => {
+    if (!online) throw new TypeError("offline");
+    return html(new URL(request.url).pathname.startsWith("/edit/") ? '<script src="' + asset + '"></script>' : "script");
+  } }, { version: "test", shell: [], lazy: [asset] });
+  await sw.handle(req("/edit/one/"));
+  await sw.handle(req(asset));
+  online = false;
+  expect((await sw.handle(req("/edit/one/"))).status).toBe(200);
+  expect((await sw.handle(req(asset))).status).toBe(200);
+  expect((await sw.handle(req("/_site/beta.js?v=other"))).status).toBe(503);
+});
+
+test("cached editor navigation refuses cookie loss and an account switch", async () => {
+  const caches = new MemoryCaches();
+  let cookieId: string | null = id, online = true;
+  const sw = createOfflineWorker({ caches, origin, cookieId: () => cookieId, report: () => {}, fetch: async () => {
+    if (!online) throw new TypeError("offline");
+    return html("member editor");
+  } }, { version: "test", shell: [] });
+  await sw.handle(req("/edit/one/"), undefined, "tab");
+  online = false;
+  expect((await sw.handle(req("/edit/one/"), undefined, "tab")).status).toBe(200);
+  cookieId = null;
+  expect((await sw.handle(req("/edit/one/"), undefined, "tab")).status).toBe(503);
+  cookieId = "bbbbbbbbbbbbbbbb";
+  expect((await sw.handle(req("/edit/one/"), undefined, "tab")).status).toBe(503);
+  expect(await caches.has(cacheName("pages"))).toBe(false);
+});
+
+test("lazy assets are cached on demand only at their exact build version", async () => {
+  const caches = new MemoryCaches();
+  const requested: string[] = [];
+  let online = true;
+  const sw = createOfflineWorker({ caches, origin, report: () => {}, fetch: async (request: Request) => {
+    requested.push(request.url);
+    if (!online) throw new TypeError('offline');
+    return html('lazy code');
+  } }, { version: 'test', shell: [], lazy: ['/lazy/recent-cache.js?v=abc'] });
+  await sw.install();
+  expect(requested).toEqual([]);
+  await sw.handle(req('/lazy/recent-cache.js?v=abc'));
+  online = false;
+  expect((await sw.handle(req('/lazy/recent-cache.js?v=abc'))).status).toBe(200);
+  expect((await sw.handle(req('/lazy/recent-cache.js?v=other'))).status).toBe(503);
+  await sw.wipe();
+  expect((await sw.handle(req('/lazy/recent-cache.js?v=abc'))).status).toBe(503);
+});
+
 test("install precaches exact versioned shell assets only", async () => {
   const f = fixture();
   await f.sw.install();

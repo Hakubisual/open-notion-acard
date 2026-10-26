@@ -2,7 +2,8 @@
 // base = the copy both devices last agreed on (null on a first connect), local = this PC, remote = the server copy.
 // Edits to different blocks or fields are combined. When the same block was changed differently on both sides (or
 // changed on one side and deleted on the other), the page edited last wins as a whole and the other side's full page is
-// returned as `copy`, which the caller saves as a "(충돌 사본)" page, so no content is lost.
+// returned as `copy`, which the caller saves as a "(충돌 사본)" page, so no content is lost. On a database or row page the
+// definition and the cells still merge in that case (#136): only the body text goes to the copy.
 // A database page carries its definition (properties, views, templates, rules, form) and a row page its cells and
 // outgoing relation links; they merge per item id and per property id. When the same item or cell was changed
 // differently on both sides, the side edited last wins without a copy and `clash` is set so the caller can report it.
@@ -20,7 +21,10 @@ export type SyncDoc = {
   tags: string[];
   database?: SyncDatabase;
   row?: SyncRow;
+  // Conflicts the sending PC found on this page, so the other PCs can count them too (#136). Not part of the content.
+  conflicts?: SyncConflict[];
 };
+export type SyncConflict = { id: string; at: number; slug: string; title: string; copy: string | null };
 export type Side = { deleted: boolean; doc: SyncDoc | null };
 export type MergeResult = { deleted: boolean; doc: SyncDoc | null; copy: SyncDoc | null; winner: "local" | "remote" | "merged"; clash: boolean };
 
@@ -123,9 +127,15 @@ export function mergePage(base: Side | null, local: Side, remote: Side): MergeRe
   if (local.deleted) return { deleted: false, doc: remote.doc, copy: null, winner: "remote", clash: false };
   const l = local.doc!, r = remote.doc!, b = base && !base.deleted ? base.doc : null;
   const blocks = mergeBlocks(b ? b.blocks : null, l.blocks, r.blocks);
+  const clash: Clash = { hit: false };
+  const database = mergeDatabase(b?.database, l.database, r.database, localNewer, clash);
+  const row = mergeRow(b?.row, l.row, r.row, localNewer, clash);
   if (!blocks) {
     const [win, lose] = localNewer ? [l, r] : [r, l];
-    return { deleted: false, doc: win, copy: lose, winner: localNewer ? "local" : "remote", clash: false };
+    const doc: SyncDoc = { ...win };
+    if (database) doc.database = database;
+    if (row) doc.row = row;
+    return { deleted: false, doc, copy: lose, winner: localNewer ? "local" : "remote", clash: clash.hit };
   }
   const field = <K extends keyof SyncDoc["page"]>(k: K) => pick(b?.page[k], l.page[k], r.page[k], localNewer);
   const doc: SyncDoc = {
@@ -136,9 +146,6 @@ export function mergePage(base: Side | null, local: Side, remote: Side): MergeRe
     view: pick(b?.view ?? null, l.view, r.view, localNewer),
     tags: pick(b?.tags ?? [], l.tags, r.tags, localNewer),
   };
-  const clash: Clash = { hit: false };
-  const database = mergeDatabase(b?.database, l.database, r.database, localNewer, clash);
-  const row = mergeRow(b?.row, l.row, r.row, localNewer, clash);
   if (database) doc.database = database;
   if (row) doc.row = row;
   return { deleted: false, doc, copy: null, winner: "merged", clash: clash.hit };

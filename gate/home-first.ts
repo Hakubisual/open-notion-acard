@@ -29,18 +29,10 @@ function avatarHtml(session: Session): string {
 
 const STYLE = "<style>.nav-right .my-home{gap:10px;padding:0 18px 0 8px}.my-avatar{width:28px;height:28px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.22);color:inherit;font-size:var(--fs-14);font-weight:700;object-fit:cover}@media (max-width:760px){.nav-right .my-home{padding:0 14px 0 6px;gap:8px}.my-avatar{width:24px;height:24px;font-size:var(--fs-13)}}</style>";
 
-export function rewriteMyHome(res: Response, session: Session): Response {
+// The top bar part (header.nav), also used on the public pages that share the landing's bar (gate/site-nav-html.ts).
+export function myHomeNav(rewriter: HTMLRewriter, session: Session): HTMLRewriter {
   const avatar = avatarHtml(session);
-  const board = (el: Element) => {
-    el.setAttribute("href", HOME_PATH);
-    el.removeAttribute("data-beta");
-    el.removeAttribute("data-cta");
-    el.removeAttribute("data-i18n-html");
-    el.setAttribute("data-i18n", "land.myBoard");
-    el.setAttribute("data-my-home", "board");
-    el.setInnerContent("내 보드로 가기");
-  };
-  return new HTMLRewriter()
+  return rewriter
     .on("head", { element(el) { el.append(STYLE, { html: true }); } })
     .on("body", { element(el) { el.setAttribute("data-session", "1"); } })
     .on(".nav-right a.login-link, .nav-right a.invite-link", { element(el) { el.remove(); } })
@@ -54,11 +46,34 @@ export function rewriteMyHome(res: Response, session: Session): Response {
         el.setInnerContent(avatar + '<span data-i18n="' + (short ? "land.myHomeShort" : "land.myHome") + '">내 홈으로</span>', { html: true });
       },
     })
-    .on('.site-menu a[href="/login"]', { element(el) { el.setAttribute("href", HOME_PATH); el.setAttribute("data-i18n", "land.myHome"); el.setAttribute("data-my-home", "menu"); } })
+    .on('.site-menu a[href="/login"]', { element(el) { el.setAttribute("href", HOME_PATH); el.setAttribute("data-i18n", "land.myHome"); el.setAttribute("data-my-home", "menu"); } });
+}
+
+// The public pages with the landing's bar (/compare, /download, /guide) get the landing's bar steps on the bar only: 내 홈으로
+// for a signed-in visitor, and in the closed beta the WAITLIST buttons pointing at the landing's form.
+export function rewriteSiteNav(res: Response, session: Session | null, closedBeta: boolean): Response {
+  if (session) return myHomeNav(new HTMLRewriter(), session).transform(res);
+  if (!closedBeta) return res;
+  return new HTMLRewriter()
+    .on('header.nav a[href="/signup"]', { element(el) { el.setAttribute("href", "/#waitlist"); el.setAttribute("data-beta", "1"); } })
+    .transform(res);
+}
+
+export function rewriteMyHome(res: Response, session: Session): Response {
+  const board = (el: Element) => {
+    el.setAttribute("href", HOME_PATH);
+    el.removeAttribute("data-beta");
+    el.removeAttribute("data-cta");
+    el.removeAttribute("data-i18n-html");
+    el.setAttribute("data-i18n", "land.myBoard");
+    el.setAttribute("data-my-home", "board");
+    el.setInnerContent("내 보드로 가기");
+  };
+  return myHomeNav(new HTMLRewriter(), session)
     .on('main a[href="/signup"]:not(.m-plan), .hero-cta a[href="/beta?from=landing"]', { element: board })
     .on('a.m-plan[href="/signup"]', { element(el) { el.setAttribute("href", HOME_PATH); el.removeAttribute("data-cta"); el.setAttribute("data-my-home", "board"); } })
     .on('a.m-plan span[data-i18n-html="land.m.cloud"]', { element(el) { el.removeAttribute("data-i18n-html"); el.setAttribute("data-i18n", "land.myBoard"); el.setInnerContent("내 보드로 가기"); } })
-    .on("#waitlist", { element(el) { el.remove(); } })
+    .on("#waitlist, .hero-pass", { element(el) { el.remove(); } })
     .transform(res);
 }
 

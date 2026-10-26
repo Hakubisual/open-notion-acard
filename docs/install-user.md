@@ -9,7 +9,7 @@ Setting up Acard for a team instead? See [install-server.md](install-server.md).
 
 | OS | How |
 | --- | --- |
-| Windows 10/11 (x64) | Download `Acard-Local-Setup-0.3.2.exe` from the [latest release](https://github.com/Hakubisual/open-notion-acard/releases/latest) and run it. It installs for your user only (no admin rights) and adds a Start menu and desktop shortcut. |
+| Windows 10/11 (x64) | Download `Acard-Local-Setup-0.3.3.exe` from the [latest release](https://github.com/Hakubisual/open-notion-acard/releases/latest) and run it. It installs for your user only (no admin rights) and adds a Start menu and desktop shortcut. |
 | macOS, Linux | Build it from source (below). Release builds for macOS and Linux are not published yet. |
 
 The installer is not code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*. Click

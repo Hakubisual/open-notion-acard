@@ -38,7 +38,7 @@ test("typing repaints the TOC only for a heading, and never on a page without a 
 
 test("render records whether the page has a TOC block", () => {
   const node = () => ({ className: "", style: { setProperty() {} }, appendChild() {}, querySelector: () => node(), innerHTML: "", value: "" });
-  const context: any = { state: { title: "T", blocks: [] }, els: { title: node(), blocks: node() }, document: { activeElement: null, createElement: node },
+  const context: any = { state: { title: "T", blocks: [] }, transaction: null, els: { title: node(), blocks: node() }, document: { activeElement: null, createElement: node },
     structure: (blocks: any[]) => blocks, blockEl: () => node(), model: { depth: () => 0 }, columnTemplate: () => "", mountLinkedDatabases() {} };
   context.hasToc = false;
   runInNewContext(section("  function render()", "  function blockEl("), context);

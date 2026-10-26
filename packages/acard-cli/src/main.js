@@ -30,6 +30,7 @@ function parseArgs(argv) {
     else if (a.startsWith("--server=")) server = a.slice("--server=".length);
     else if (a === "-h" || a === "--help") help = true;
     else if (a === "-v" || a === "--version") positional.unshift("version");
+    else if (a === "--local") flags.local = true;
     else positional.push(a);
   }
   return { command: positional[0], rest: positional.slice(1), server, help };
