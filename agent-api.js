@@ -26,11 +26,6 @@ export async function agentGrantRevoked(db, id) {
   return Boolean(row && row.revoked);
 }
 
-export async function agentGrantRevoked(db, id) {
-  const row = await db.prepare("SELECT revoked FROM agent_grants WHERE id = ?").bind(String(id)).first();
-  return Boolean(row && row.revoked);
-}
-
 export async function markAgentGrantRevoked(db, id) {
   await db.prepare("UPDATE agent_grants SET revoked = ? WHERE id = ? AND revoked IS NULL").bind(Date.now(), String(id)).run();
 }
